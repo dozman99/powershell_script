@@ -1,0 +1,150 @@
+# @format
+
+name: Deploy and Image Creation
+
+on:
+  workflow_run:
+    workflows: ['Transfer Build to Azure File Share with Integrity Check']
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: 'Name for the VM Image'
+        required: true
+      vm_name:
+        description: 'Name of the VM to capture image from'
+        required: true
+        default: ${{ github.event.workflow_run.outputs.semantic_version }}-vm
+      resource_group:
+        description: 'Azure Resource Group'
+        required: true
+      vnet_name:
+        description: 'Virtual Network Name'
+        required: true
+      subnet_name:
+        description: 'Subnet Name'
+        required: true
+      image_sku:
+        description: 'SKU to capture image'
+        required: true
+      version:
+        description: 'Version for Image tag'
+        required: true
+        default: ${{ github.event.workflow_run.outputs.semantic_version }}
+
+jobs:
+  deploy_and_create_image:
+    runs-on: [self-hosted, Windows]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install Azure CLI and Az module
+      shell: pwsh
+      run: |
+        # Install Azure CLI and Az module
+        Install-Module -Name Az -Force -AllowClobber
+        az --version
+        Install-Module Az.Accounts -Force -AllowClobber
+        Install-Module Az.Resources -Force -AllowClobber
+
+    - name: Deploy VM and Create Image with PowerShell
+      shell: pwsh
+      env:
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        SEMANTIC_VERSION: ${{ github.event.workflow_run.outputs.semantic_version }}
+        AZURE_FILE_SHARE_DEST_PATH: ${{ github.event.workflow_run.outputs.azure_file_share_dest_path }}
+        IMAGE_NAME: ${{ github.event.inputs.image_name }}
+        VM_NAME: ${{ github.event.inputs.vm_name }}
+        RESOURCE_GROUP: ${{ github.event.inputs.resource_group }}
+        VNET_NAME: ${{ github.event.inputs.vnet_name }}
+        SUBNET_NAME: ${{ github.event.inputs.subnet_name }}
+        IMAGE_SKU: ${{ github.event.inputs.image_sku }}
+        VERSION: ${{ github.event.inputs.version }}
+      run: |
+        try {
+          # Connect to Azure
+          Write-Host "Connecting to Azure..."
+          Connect-AzAccount -ServicePrincipal `
+            -TenantId $env:AZURE_TENANT_ID `
+            -ClientId $env:AZURE_CLIENT_ID `
+            -Secret $env:AZURE_CLIENT_SECRET `
+            -SubscriptionId $env:AZURE_SUBSCRIPTION_ID
+
+          # Define variables
+          $ResourceGroupName = $env:RESOURCE_GROUP
+          $VMName = "build-ccure-$env:SEMANTIC_VERSION"
+          $Location = "eastus"
+          $VMSize = "Standard_D8as_v5"
+          $InitScriptPath = ".\\automation\\azureFileShareSysprep.ps1"
+          $VNetName = $env:VNET_NAME
+          $SubnetName = $env:SUBNET_NAME
+
+          Write-Host "Retrieving resources..."
+          $VNet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
+          $Subnet = $VNet.Subnets | Where-Object { $_.Name -eq $SubnetName }
+
+          Write-Host "Creating Network Interface..."
+          $Nic = New-AzNetworkInterface -Name "$VMName-nic" `
+              -ResourceGroupName $ResourceGroupName `
+              -Location $Location `
+              -SubnetId $Subnet.Id `
+              -NetworkSecurityGroupId (Get-AzNetworkSecurityGroup -Name "bado-nsg" -ResourceGroupName $ResourceGroupName).Id
+
+          Write-Host "Configuring Virtual Machine..."
+          $VMConfig = New-AzVMConfig -VMName $VMName -VMSize $VMSize | `
+              Set-AzVMOperatingSystem -Windows -ComputerName $VMName -Credential (Get-Credential) | `
+              Add-AzVMNetworkInterface -Id $Nic.Id | `
+              Set-AzVMSourceImage -Publisher "MicrosoftWindowsServer" -Offer "WindowsServer" `
+              -Sku "2022-datacenter-azure-edition" -Version "latest"
+
+          Write-Host "Deploying Virtual Machine..."
+          New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $VMConfig
+
+          Write-Host "Running initialization script..."
+          Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName `
+                      -VMName $VMName `
+                      -CommandId "RunPowerShellScript" `
+                      -ScriptPath $InitScriptPath `
+                      -Parameters @(
+                          @{ Name = "StorageAccountName"; Value = $StorageAccountName },
+                          @{ Name = "FileShareName"; Value = $FileShareName },
+                          @{ Name = "StorageAccountKey"; Value = $StorageAccountKey },
+                          @{ Name = "DriveLetter"; Value = $DriveLetter },
+                          @{ Name = "SourceFilesPath"; Value = $SourceFilesPath },
+                          @{ Name = "DestinationPath"; Value = $DestinationPath },
+                          @{ Name = "SysprepPath"; Value = $SysprepPath }
+                      )
+
+          Write-Host "Starting VM capture process..."
+
+          # Deallocate VM
+          Write-Host "Deallocating VM..."
+          az vm deallocate --resource-group $ResourceGroupName --name $VMName
+
+          # Mark VM as generalized
+          Write-Host "Generalizing VM..."
+          az vm generalize --resource-group $ResourceGroupName --name $VMName
+
+          # Create image version
+          Write-Host "Creating image version..."
+          az sig image-version create --resource-group $ResourceGroupName --gallery-name CCURE_image_gallery `
+            --gallery-image-definition $env:IMAGE_NAME --gallery-image-version $env:VERSION `
+            --virtual-machine /subscriptions/$env:AZURE_SUBSCRIPTION_ID/resourceGroups/$ResourceGroupName/providers/Microsoft.Compute/virtualMachines/$VMName
+
+          Write-Host "Displaying image details..."
+          az sig image-definition list --gallery-name CCURE_image_gallery --resource-group $ResourceGroupName
+
+          # Delete VM
+          Write-Host "Deleting VM..."
+          az vm delete --resource-group $ResourceGroupName --name $VMName --yes
+
+        } catch {
+          Write-Error "Deployment failed: $_"
+          exit 1
+        }
