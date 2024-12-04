@@ -24,6 +24,9 @@ on:
         description: Destination path to the second Azure file share (new server)
         required: true
         type: string
+      nfs_address:
+        description: 'The NFS server address'
+        required: true
       on_prem_map_drive:
         description: Drive letter for mounting the on-premises network drive
         default: 'Z:'
