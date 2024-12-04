@@ -133,3 +133,9 @@ jobs:
     - name: Delete Virtual Machine
       run: |
         az vm delete --resource-group ${{ inputs.resource_group }} --name "build-ccure-${{ inputs.version }}" --yes
+
+    - name: Delete Network Interface
+      run: | 
+        echo "Deleting the Network Interface..." az network nic delete \
+        --resource-group ${{ inputs.resource_group }} \ 
+        --name "build-ccure-${{ inputs.version }}-nic"
