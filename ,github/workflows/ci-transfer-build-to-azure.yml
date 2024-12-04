@@ -37,19 +37,7 @@ on:
         default: 'Y:'
         required: false
         type: string
-    secrets:
-      AZURE_STORAGE_ACCOUNT:
-        description: Azure storage account name
-        required: true
-      AZURE_STORAGE_KEY:
-        description: Azure storage account key
-        required: true
-      BACKUP_JOB_USER:
-        description: user with permissions for NFS
-        required: true
-      BACKUP_JOB_PW:
-        description: user pw for NFS access
-        required: true
+
 
 jobs:
   TransferBuild:

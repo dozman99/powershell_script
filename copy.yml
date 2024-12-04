@@ -1,0 +1,24 @@
+name: Call Deploy and Image Creation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  call_deploy_and_create_image:
+    uses: ./.github/workflows/deploy_and_image_creation.yml
+    with:
+      image_name: 'example-image-name'
+      vm_name: 'example-vm-name'
+      resource_group: 'example-resource-group'
+      vnet_name: 'example-vnet-name'
+      subnet_name: 'example-subnet-name'
+      image_sku: 'example-image-sku'
+      version: 'v1.0.0'
+      nsg_name: 'example-nsg-name'
+    secrets:
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
