@@ -1,7 +1,7 @@
 # @format
 name: Transfer Build to Azure File Share with Integrity Check
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       build_path:
         description: Base path where builds are located

@@ -1,6 +1,6 @@
 # @format
 
-name: Deploy and Image Creation
+name: Deploy a vm and Image Creation
 
 on:
   workflow_run:
