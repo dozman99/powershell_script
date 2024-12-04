@@ -1,5 +1,4 @@
-# @format
-name: Transfer Build to Azure File Share with Integrity Check
+name: Transfer Build to Azure
 on:
   workflow_dispatch:
     inputs:
@@ -11,15 +10,6 @@ on:
         description: Semantic version to locate the build
         required: true
         type: string
-      temp_directory:
-        description: Temporary directory on the runner for processing the build
-        default: 'C:\\Temp'
-        required: false
-        type: string
-      hyperv_host_label:
-        description: Label of host where vm lives, must be connected to repo conducting backup as runner
-        required: true
-        type: string
       azure_file_share_dest_path:
         description: Destination path to the second Azure file share (new server)
         required: true
@@ -27,6 +17,7 @@ on:
       nfs_address:
         description: 'The NFS server address'
         required: true
+        type: string
       on_prem_map_drive:
         description: Drive letter for mounting the on-premises network drive
         default: 'Z:'
@@ -37,15 +28,30 @@ on:
         default: 'Y:'
         required: false
         type: string
-
-
+      resource_group:
+        description: 'Azure Resource Group'
+        required: true
+        type: string
+      vnet_name:
+        description: 'Virtual Network Name'
+        required: true
+        type: string
+      subnet_name:
+        description: 'Subnet Name'
+        required: true
+        type: string
+      nsg_name:
+        description: ' Network Security Group Name'
+        required: true
+        type: string
 jobs:
   TransferBuild:
-    runs-on: [self-hosted, Windows, '${{ inputs.hyperv_host_label }}']
+    # runs-on: [self-hosted, Windows, C2892M312]
+    runs-on: windows-latest
     env:
-      TEMP_DIR: "${{ inputs.temp_directory }}"
+      TEMP_DIR: "C:\\Temp"
       DESTINATION_PATH: "${{ inputs.azure_dest_map_drive }}\\builds\\UC_${{ inputs.semantic_version }}_${{ github.run_id }}"
-      CHECKSUM_FILE: "${{ inputs.temp_directory }}\\build_checksum.txt"
+      CHECKSUM_FILE: "C:\\Temp\\build_checksum.txt"
 
     steps:
       # Step 1: Mount On-Prem Network Drive
@@ -163,3 +169,23 @@ jobs:
     outputs:
       semantic_version: ${{ steps.set_output.outputs.semantic_version }}
       azure_file_share_dest_path: ${{ steps.set_output.outputs.azure_file_share_dest_path }}
+
+
+  create_disposable_vm_and_image:
+        uses: ./.github/workflows/image_creation.yml
+        with:
+          resource_group: ${{ inputs.resource_group}}
+          vnet_name: ${{ inputs.vnet_name}}
+          subnet_name: ${{ inputs.subnet_name}}
+          version: ${{ inputs.semantic_version}}
+          nsg_name: ${{ inputs.nsg_name}}
+          storage_account_name: null
+          file_share_name: null
+          storage_account_key: null
+          source_files_path: ${{ inputs.azure_file_share_dest_path }}
+
+        secrets:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
