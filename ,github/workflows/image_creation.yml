@@ -35,6 +35,19 @@ on:
       nsg_name:
         description: ' Network Security Group Name'
         required: true
+    secrets:
+      AZURE_SUBSCRIPTION_ID:
+        description: Your Azure subscription ID.
+        required: true
+      AZURE_TENANT_ID:
+        description: Your Azure Active Directory tenant ID.
+        required: true
+      AZURE_CLIENT_ID:
+        description: The application ID of your Azure AD application with access to the NFS share.
+        required: true
+      AZURE_CLIENT_SECRET:
+        description: The client secret of your Azure AD application.
+        required: true
 
 jobs:
   deploy_and_create_image:
