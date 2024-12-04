@@ -171,7 +171,7 @@ jobs:
       azure_file_share_dest_path: ${{ steps.set_output.outputs.azure_file_share_dest_path }}
 
 
-  create_disposable_vm_and_image:
+  create_disposable_vm_for_image:
         uses: ./.github/workflows/image_creation.yml
         with:
           resource_group: ${{ inputs.resource_group}}
