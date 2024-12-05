@@ -103,7 +103,7 @@ jobs:
       run: | 
         echo "Creating the Resource Group..."
         az group create \
-        --name "${{ env.VM_NAME }}-rg" \ 
+        --resource-group "${{ env.VM_NAME }}-rg" \ 
         --location ${{ inputs.net_location }} 
         
     - name: Create Virtual Machine
@@ -152,5 +152,7 @@ jobs:
       run: | 
         echo "Deleting the Resource Group..."
         az group delete \
-        --resource-group ${{ inputs.resource_group }} \ 
-        --name "${{ env.VM_NAME }}-rg" --yes
+        -n ${{ inputs.resource_group }} \ 
+        --force-deletion-types Microsoft.Compute/virtualMachines \
+        --yes \
+        --no-wait
