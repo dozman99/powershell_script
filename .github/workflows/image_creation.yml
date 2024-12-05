@@ -128,7 +128,7 @@ jobs:
       run: |
         az sig image-version create --resource-group ${{ inputs.resource_group }} \
           --gallery-name CCURE_image_gallery \
-          --gallery-image-definition ${{ inputs.version }} \
+          --gallery-image-definition ccure-build-images \
           --gallery-image-version ${{ inputs.version }} \
           --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.VM_NAME }}-rg/providers/Microsoft.Compute/virtualMachines/${{ env.VM_NAME }}
 
