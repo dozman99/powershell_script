@@ -102,9 +102,7 @@ jobs:
     - name: create Resource Group
       run: | 
         echo "Creating the Resource Group..."
-        az group create \
-        -n "${{ env.VM_NAME }}-rg" \ 
-        --location ${{ inputs.net_location }} 
+        az group create --name "${{ env.VM_NAME }}-rg" --location ${{ inputs.net_location }} 
         
     - name: Create Virtual Machine
       run: |
