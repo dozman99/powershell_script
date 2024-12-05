@@ -3,7 +3,7 @@ param (
     [string]$FileShareName,
     [string]$StorageAccountKey,
     [string]$SourceFilesPath,
-    [string]$DestinationPath = "C:\Users\azureuser\Desktop\build",
+    [string]$DestinationPath = "C:\Users\ccureuser\Desktop\build",
     [string]$SysprepPath = "C:\Windows\System32\Sysprep\Sysprep.exe"
 )
 
