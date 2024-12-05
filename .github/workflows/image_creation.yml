@@ -61,7 +61,8 @@ on:
 
 jobs:
   deploy_and_create_image:
-    runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
+    # runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
