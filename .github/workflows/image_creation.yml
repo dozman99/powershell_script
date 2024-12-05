@@ -130,7 +130,7 @@ jobs:
           --gallery-name CCURE_image_gallery \
           --gallery-image-definition ${{ inputs.version }} \
           --gallery-image-version ${{ inputs.version }} \
-          --source /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.VM_NAME }}-rg/providers/Microsoft.Compute/virtualMachines/${{ env.VM_NAME }}
+          --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.VM_NAME }}-rg/providers/Microsoft.Compute/virtualMachines/${{ env.VM_NAME }}
 
     - name: Display Image Details
       run: |
