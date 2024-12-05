@@ -83,7 +83,7 @@ jobs:
     - name: variable
       run: |
         az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        echo "VM_NAME=build-ccure-${{ inputs.version }}" >> $GITHUB_ENV 
+        echo "VM_NAME=(echo ccure${{ inputs.version }} | tr '.' '-' )" >> $GITHUB_ENV 
 
     - name: Retrieve VNet and Subnet details
       id: retrieve_vnet_subnet
