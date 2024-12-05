@@ -89,18 +89,18 @@ jobs:
         NSG_ID=$(az network nsg show --resource-group ${{ inputs.resource_group }} --name ${{ inputs.nsg_name }} --query id -o tsv)
         echo "NSG_ID=${NSG_ID}" >> $GITHUB_ENV
 
-    - name: Create Network Interface
-      id: create_nic
-      run: |
-        NIC_ID=$(az network nic create --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}-nic" \
-          --subnet ${{ env.SUBNET_ID }} --network-security-group ${{ env.NSG_ID }} --query 'id' -o tsv)
-        echo "NIC_ID=${NIC_ID}" >> $GITHUB_ENV
+    # - name: Create Network Interface
+    #   id: create_nic
+    #   run: |
+    #     NIC_ID=$(az network nic create --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}-nic" \
+    #       --subnet ${{ env.SUBNET_ID }} --network-security-group ${{ env.NSG_ID }} --query 'id' -o tsv)
+    #     echo "NIC_ID=${NIC_ID}" >> $GITHUB_ENV
 
     - name: Create Virtual Machine
       run: |
         az vm create --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}" \
           --location eastus --size Standard_D8as_v5 \
-          --nics ${{ env.NIC_ID }} --image WindowsServer:2022-Datacenter:azure-edition:latest \
+          --nics "${{ env.VM_NAME }}-nic" --image MicrosoftWindowsServer:WindowsServer:2022-datacenter-windows-server-core-10-tsc2022:latest \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ccureuser --admin-password "YourStrongPassword123!"
 
@@ -138,9 +138,9 @@ jobs:
       run: |
         az vm delete --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}" --yes
 
-    - name: Delete Network Interface
-      run: | 
-        echo "Deleting the Network Interface..."
-        az network nic delete \
-        --resource-group ${{ inputs.resource_group }} \ 
-        --name "${{ env.VM_NAME }}-nic"
+    # - name: Delete Network Interface
+    #   run: | 
+    #     echo "Deleting the Network Interface..."
+    #     az network nic delete \
+    #     --resource-group ${{ inputs.resource_group }} \ 
+    #     --name "${{ env.VM_NAME }}-nic"
