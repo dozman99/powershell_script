@@ -13,6 +13,10 @@ on:
         description: 'Azure Resource Group'
         required: true
         type: string
+      net_location:
+        description: 'The location of the network resources'
+        required: true
+        type: string
       vnet_name:
         description: 'Virtual Network Name'
         required: true
@@ -95,11 +99,17 @@ jobs:
     #     NIC_ID=$(az network nic create --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}-nic" \
     #       --subnet ${{ env.SUBNET_ID }} --network-security-group ${{ env.NSG_ID }} --query 'id' -o tsv)
     #     echo "NIC_ID=${NIC_ID}" >> $GITHUB_ENV
-
+    - name: create Resource Group
+      run: | 
+        echo "Creating the Resource Group..."
+        az group create \
+        --name "${{ env.VM_NAME }}-rg" \ 
+        --location ${{ inputs.net_location }} 
+        
     - name: Create Virtual Machine
       run: |
         az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
-          --location eastus --size Standard_D8as_v5 \
+          --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
           --nics "${{ env.VM_NAME }}-nic" --image Win2022Datacenter \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ccureuser --admin-password "YourStrongPassword123!"
