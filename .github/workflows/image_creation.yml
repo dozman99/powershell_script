@@ -93,32 +93,32 @@ jobs:
         NSG_ID=$(az network nsg show --resource-group ${{ inputs.resource_group }} --name ${{ inputs.nsg_name }} --query id -o tsv)
         echo "NSG_ID=${NSG_ID}" >> $GITHUB_ENV
 
-    - name: create Resource Group
-      run: | 
-        echo "Creating the Resource Group..."
-        az group create --resource-group "${{ env.VM_NAME }}-rg" --location ${{ inputs.net_location }} 
+    # - name: create Resource Group
+    #   run: | 
+    #     echo "Creating the Resource Group..."
+    #     az group create --resource-group "${{ env.VM_NAME }}-rg" --location ${{ inputs.net_location }} 
         
-    - name: Create Virtual Machine
-      run: |
-        az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
-          --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
-          --image Win2022Datacenter \
-          --os-disk-name "${{ env.VM_NAME }}-osdisk" \
-          --admin-username ccureuser --admin-password "YourStrongPassword123!"
+    # - name: Create Virtual Machine
+    #   run: |
+    #     az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
+    #       --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
+    #       --image Win2022Datacenter \
+    #       --os-disk-name "${{ env.VM_NAME }}-osdisk" \
+    #       --admin-username ccureuser --admin-password "YourStrongPassword123!"
 
-    - name: Mount Init Script
-      run: |
-        az vm run-command invoke --resource-group ${{ env.VM_NAME }}-rg --name "${{ env.VM_NAME }}" \
-          --command-id RunPowerShellScript --scripts @image_automation_scripts/azureFileShareSysprep.ps1 \
-          --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
-                       'FileShareName=${{ inputs.file_share_name }}' \
-                       'StorageAccountKey=${{ inputs.storage_account_key }}' \
-                       'SourceFilesPath=${{ inputs.source_files_path }}' \
-                       'DestinationPath=C:\\Users\\ccureuser\\Desktop\\build'
+    # - name: Mount Init Script
+    #   run: |
+    #     az vm run-command invoke --resource-group ${{ env.VM_NAME }}-rg --name "${{ env.VM_NAME }}" \
+    #       --command-id RunPowerShellScript --scripts @image_automation_scripts/azureFileShareSysprep.ps1 \
+    #       --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
+    #                    'FileShareName=${{ inputs.file_share_name }}' \
+    #                    'StorageAccountKey=${{ inputs.storage_account_key }}' \
+    #                    'SourceFilesPath=${{ inputs.source_files_path }}' \
+    #                    'DestinationPath=C:\\Users\\ccureuser\\Desktop\\build'
 
     - name: Deallocate Virtual Machine
       run: |
-        az vm deallocate --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}"
+        az vm deallocate --resource-group "${{ env.VM_NAME }}-rg"} --name "${{ env.VM_NAME }}"
 
     - name: Generalize Virtual Machine
       run: |
