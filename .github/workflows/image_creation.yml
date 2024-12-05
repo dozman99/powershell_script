@@ -122,7 +122,7 @@ jobs:
 
     - name: Generalize Virtual Machine
       run: |
-        az vm generalize --resource-group ${{ inputs.resource_group }} --name "${{ env.VM_NAME }}"
+        az vm generalize --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}"
 
     - name: Create Shared Image Gallery image version
       run: |
