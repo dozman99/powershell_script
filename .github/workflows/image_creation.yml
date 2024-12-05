@@ -108,7 +108,7 @@ jobs:
       run: |
         az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
           --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
-          --nics "${{ env.VM_NAME }}-nic" --image Win2022Datacenter \
+          --image Win2022Datacenter \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ccureuser --admin-password "YourStrongPassword123!"
 
