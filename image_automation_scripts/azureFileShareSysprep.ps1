@@ -9,6 +9,7 @@ param (
 
 function Set-ExecutionPolicyIfNeeded {
     if ((Get-ExecutionPolicy) -ne "RemoteSigned") {
+        Write-Host "Setting execution policy to RemoteSigned..." -ForegroundColor Green
         Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
     }
 }
@@ -23,16 +24,29 @@ function Install-AzCopy {
     Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
     Remove-Item -Path "AzCopy.zip" -Force
 
-    $global:azCopyPath = (Get-ChildItem "C:\Program Files\AzCopy\*" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+    $global:azCopyPath = (Get-ChildItem "C:\Program Files\AzCopy" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+    if (!(Test-Path $global:azCopyPath)) {
+        Write-Error "AzCopy installation failed. Ensure the file exists in 'C:\Program Files\AzCopy'."
+        Exit 1
+    }
+    Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
 }
 
 function Copy-FilesUsingAzCopy {
     $sourceUri = "https://$StorageAccountName.file.core.windows.net/$FileShareName/$SourceFilesPath?$StorageAccountKey"
-    $azCopyCommand = "& '$global:azCopyPath' copy '$sourceUri' '$DestinationPath' --recursive --preserve-smb-info=true"
+    if (!(Test-Path $DestinationPath)) {
+        Write-Host "Creating destination path: $DestinationPath" -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $DestinationPath -Force
+    }
 
-    Write-Host "Copying files from the Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
-    Invoke-Expression $azCopyCommand
-    Write-Host "Files copied successfully to local directory." -ForegroundColor Green
+    Write-Host "Copying files from Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
+    try {
+        Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$sourceUri", "$DestinationPath", "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
+        Write-Host "Files copied successfully to $DestinationPath." -ForegroundColor Green
+    } catch {
+        Write-Error "File copy failed: $_.Exception.Message"
+        Exit 1
+    }
 }
 
 function Run-Sysprep {
@@ -47,7 +61,12 @@ function Run-Sysprep {
 }
 
 # Main script execution
-Set-ExecutionPolicyIfNeeded
-Install-AzCopy
-Copy-FilesUsingAzCopy
-Run-Sysprep
+try {
+    Set-ExecutionPolicyIfNeeded
+    Install-AzCopy
+    Copy-FilesUsingAzCopy
+    Run-Sysprep
+} catch {
+    Write-Error "An error occurred during script execution: $_.Exception.Message"
+    Exit 1
+}
