@@ -170,7 +170,7 @@ jobs:
       storage_account_name: "tfstateconclase"
       file_share_name: "testing-sprint"
       storage_account_key: "?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2024-12-06T01:09:57Z&st=2024-12-05T17:09:57Z&spr=https,http&sig=Id%2B%2BIjV0lhOv%2FYgRBL8NSJpLD6uVqbMKs7XAVQVfTnI%3D"
-      source_files_path: "${{ inputs.azure_file_share_dest_path }}"
+      source_files_path: ${{ inputs.azure_file_share_dest_path }}
       net_location: "eastus"
 
     secrets:
