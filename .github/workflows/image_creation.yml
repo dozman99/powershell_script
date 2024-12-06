@@ -132,6 +132,15 @@ jobs:
           --gallery-image-version ${{ inputs.version }} \
           --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.VM_NAME }}-rg/providers/Microsoft.Compute/virtualMachines/${{ env.VM_NAME }}
 
+
+
+               az sig image-version create --resource-group ${{ inputs.resource_group }} --gallery-name CCURE_image_galley \
+          --gallery-image-definition ${{ inputs.image_name }} --gallery-image-version ${{ inputs.version }} \
+          --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.resource_group }}/providers/Microsoft.Compute/virtualMachines/${{ inputs.vm_name }}
+
+
+
+          
     - name: Display Image Details
       run: |
         az sig image-definition list --gallery-name CCURE_image_galley --resource-group ${{ inputs.resource_group }}

@@ -1,0 +1,173 @@
+name: Transfer Build to Azure
+on:
+  workflow_dispatch:
+    inputs:
+      build_path:
+        description: Base path where builds are located
+        required: true
+        type: string
+      semantic_version:
+        description: Semantic version to locate the build
+        required: true
+        type: string
+      azure_file_share_dest_path:
+        description: Destination path to the second Azure file share (new server)
+        required: true
+        type: string
+      nfs_address:
+        description: 'The NFS server address'
+        required: true
+        type: string
+      on_prem_map_drive:
+        description: Drive letter for mounting the on-premises network drive
+        default: 'B:'
+        required: false
+        type: string
+      vnet_location:
+        description: Vnet Location for the Virtual Machine
+        default: 'eastus'
+        required: false
+        type: string
+      resource_group:
+        description: 'Azure Resource Group'
+        required: true
+        type: string
+      vnet_name:
+        description: 'Virtual Network Name'
+        required: true
+        type: string
+        default: "ccure-osp-dev-vNet"
+      subnet_name:
+        description: 'Subnet Name'
+        required: true
+        type: string
+        default: "default"
+      nsg_name:
+        description: ' Network Security Group Name'
+        required: true
+        type: string
+        default: "vm-osp-ccure-windows-server-2022-nsg"
+jobs:
+  TransferBuild:
+    runs-on: [self-hosted, Windows, C2892M312]
+    # runs-on: windows-latest
+    env:
+      TEMP_DIR: "C:\\Temp"
+      CHECKSUM_FILE: "C:\\Temp\\build_checksum.txt"
+
+    steps:
+      # Step 1: Mount On-Prem Network Drive
+      - name: Mount On-Prem Network Drive
+        run: |
+          net use ${{ inputs.on_prem_map_drive }} /delete /yes
+          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
+          net use
+          
+      # Step 2: Fetch the build file using naming pattern
+      - name: Fetch Build
+        run: |
+          $buildPath = Join-Path ${{ inputs.build_path }} "UC_${{ inputs.semantic_version }}"
+          Write-Host $buildPath
+          New-Item -ItemType Directory -Path "C:\JCIBuilds\"
+          New-Item -ItemType File -Path "C:\\JCIBuilds\\build_checksum.txt"
+          #New-Item -ItemType Directory -Path "C:\JCIBuilds\"
+          #New-Item -ItemType File -Path "C:\\JCIBuilds\\build_checksum.txt"
+          Get-FileHash -Path "$buildPath" -Algorithm SHA256 | Out-File -FilePath "C:\\JCIBuilds\\build_checksum.txt"
+          Write-Host "Getting the FileHash"
+          Copy-Item -Path "$buildPath" -Destination "${{ env.TEMP_DIR }}" -Recurse
+          Get-ChildItem "${{ env.TEMP_DIR }}" -Recurse
+          Write-Host "File Copied Successfully"
+          
+      # Step 3: Install-AzCopy 
+      - name: Install AzCopy
+        run: |
+
+          $SourcePath = "C:\Users\ccureuser\Desktop\build"
+
+          Write-Host "Downloading AzCopy..." -ForegroundColor Green
+          Invoke-WebRequest -Uri "https://aka.ms/downloadazcopy-v10-windows" -OutFile "AzCopy.zip" -UseBasicParsing
+      
+          Write-Host "Extracting AzCopy..." -ForegroundColor Green
+          Expand-Archive -Path "AzCopy.zip" -SourcePath "C:\Program Files\AzCopy" -Force
+      
+          Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
+          Remove-Item -Path "AzCopy.zip" -Force
+      
+          $global:azCopyPath = (Get-ChildItem "C:\Program Files\AzCopy" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+          if (!(Test-Path $global:azCopyPath)) {
+              Write-Error "AzCopy installation failed. Ensure the file exists in 'C:\Program Files\AzCopy'."
+              Exit 1
+          }
+          Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
+          $sourceUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.azure_file_share_dest_path }}?${{ secrets.SAS_TOKEN }}"
+          if (!(Test-Path $SourcePath)) {
+              Write-Host "Creating destination path: $SourcePath" -ForegroundColor Yellow
+              New-Item -ItemType Directory -Path $SourcePath -Force
+          }
+      
+          Write-Host "Copying files from Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
+          try {
+              Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$SourcePath", "$sourceUri" , "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
+              Write-Host "Files copied successfully form $SourcePath." -ForegroundColor Green
+          } catch {
+              Write-Error "File copy failed: $_.Exception.Message"
+              Exit 1
+          }
+
+      # Step 4: Cleanup Temporary Directory
+      - name: Cleanup Temporary Directory
+        if: ${{ always() }}
+        run: |
+          try {
+              if (Test-Path "${{ env.TEMP_DIR }}") {
+                  Remove-Item -Path "${{ env.TEMP_DIR }}" -Recurse -Force
+                  Write-Host "Temporary directory cleaned up."
+              }
+          } catch {
+              Write-Error "Failed to clean up temporary directory: $_"
+              exit 1
+          }
+
+      # Step 5: Cleanup Network Drives
+      - name: Cleanup Network Drives
+        if: ${{ always() }}
+        run: |
+          try {
+              net use ${{ inputs.on_prem_map_drive }} /delete /yes
+              Write-Host "Network drives cleaned up."
+          } catch {
+              Write-Error "Failed to clean up network drives: $_"
+              exit 1
+          }
+
+      # Step 7: Set Output Variables
+      - name: Set Output Variables
+        id: set_output
+        run: |
+          echo "semantic_version=${{ inputs.semantic_version }}" >> $GITHUB_OUTPUT
+          echo "azure_file_share_dest_path=${{ inputs.azure_file_share_dest_path }}" >> $GITHUB_OUTPUT
+
+    outputs:
+      semantic_version: ${{ steps.set_output.outputs.semantic_version }}
+      azure_file_share_dest_path: ${{ steps.set_output.outputs.azure_file_share_dest_path }}
+
+
+  create_disposable_vm_for_image:
+        uses: ./.github/workflows/image_creation.yml
+        with:
+          resource_group: ${{ inputs.resource_group}}
+          vnet_name: ${{ inputs.vnet_name}}
+          subnet_name: ${{ inputs.subnet_name}}
+          version: ${{ inputs.semantic_version}}
+          nsg_name: ${{ inputs.nsg_name}}
+          storage_account_name: "ospclouddevccurebuilds"
+          file_share_name: "ospclouddevccurefileshare"
+          storage_account_key: ${{ secrets.SAS_TOKEN }}
+          source_files_path: ${{ inputs.azure_file_share_dest_path }}
+          net_location: ${{ inputs.vnet_location}}
+      
+        secrets:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
