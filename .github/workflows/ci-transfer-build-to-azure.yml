@@ -1,3 +1,5 @@
+# @format
+
 name: Transfer Build to Azure
 on:
   workflow_dispatch:
@@ -36,23 +38,23 @@ on:
         description: 'Virtual Network Name'
         required: true
         type: string
-        default: "ccure-osp-dev-vNet"
+        default: 'ccure-osp-dev-vNet'
       vm_image_version:
         description: 'VM Image Version using semantic versioning'
         required: true
         type: string
-        default: "1.0.2"
+        default: '1.0.2'
       nsg_name:
         description: ' Network Security Group Name'
         required: true
         type: string
-        default: "vm-osp-ccure-windows-server-2022-nsg"
+        default: 'vm-osp-ccure-windows-server-2022-nsg'
 jobs:
   TransferBuild:
     runs-on: [self-hosted, Windows, C2892M312]
     # runs-on: windows-latest
     env:
-      TEMP_DIR: "Projects"
+      TEMP_DIR: 'projects'
       CHECKSUM_FILE: "C:\\Temp\\build_checksum.txt"
 
     steps:
@@ -62,12 +64,15 @@ jobs:
           net use ${{ inputs.on_prem_map_drive }} /delete /yes
           net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
           net use
-          
+
       # Step 2: Fetch the build file using naming pattern
       - name: Fetch Build
         run: |
           # Define the build path
           $buildPath = Join-Path ${{ inputs.build_path }} "UC_${{ inputs.semantic_version }}"
+          $currentDirectory = Get-Location
+          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
+          $hashDir = Join-Path $tempDir build_checksum.txt
 
           # List files in the build path
           Get-ChildItem -Path $buildPath | Select-Object -ExpandProperty Name
@@ -78,21 +83,21 @@ jobs:
           # Calculate file hash and save it to a file
           Write-Host "Calculating FileHash"
           $originalHash = Get-FileHash -Path "$buildPath" -Algorithm SHA256
-          $originalHash | Out-File -FilePath "${{ env.TEMP_DIR }}\\build_checksum.txt"
+          $originalHash | Out-File -FilePath $hashDir
 
           # Create the temporary directory if it doesn't exist
-          New-Item -Path "${{ env.TEMP_DIR }}" -ItemType Directory -Force
+          New-Item -Path $tempDir -ItemType Directory -Force
 
           # Copy files to the temporary directory
           Write-Host "Copying files to the temporary directory..."
-          Copy-Item -Path "$buildPath" -Destination "${{ env.TEMP_DIR }}" -Recurse
+          Copy-Item -Path "$buildPath" -Destination $tempDir -Recurse
 
           # List files in the temporary directory to verify the copy
-          Get-ChildItem -Path "${{ env.TEMP_DIR }}" | Select-Object -ExpandProperty Name
+          Get-ChildItem -Path $tempDir | Select-Object -ExpandProperty Name
 
           # Verify the hash file after copy
           Write-Host "Verifying FileHash after copy"
-          $copiedHash = Get-FileHash -Path "${{ env.TEMP_DIR }}\\build_checksum.txt" -Algorithm SHA256
+          $copiedHash = Get-FileHash -Path $hashDir -Algorithm SHA256
           if ($originalHash.Hash -eq $copiedHash.Hash) {
               Write-Host "Hash verification successful: $($originalHash.Hash)"
           } else {
@@ -103,15 +108,16 @@ jobs:
           # Indicate success
           Write-Host "Files copied and verified successfully"
 
-              
-      # Step 3: Install-AzCopy 
+      # Step 3: Install-AzCopy
       - name: Install AzCopy
         run: |
-          $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ github.sha }}"
+          $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
           $AzCopyZipPath = "AzCopy.zip"
           $AzCopyInstallPath = "C:\Program Files\AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ secrets.AZURE_FILE_SHARE_DEST_PATH }}?${{ secrets.SAS_TOKEN }}"
+          $currentDirectory = Get-Location
+          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
 
           function Install-AzCopy {
               Write-Host "Downloading AzCopy..." -ForegroundColor Green
@@ -145,8 +151,8 @@ jobs:
           function Cleanup-TempDirectory {
               Write-Host "Cleaning up temporary directory..." -ForegroundColor Green
               try {
-                  if (Test-Path "${{ env.TEMP_DIR }}") {
-                      Remove-Item -Path "${{ env.TEMP_DIR }}" -Recurse -Force
+                  if (Test-Path $tempDir) {
+                      Remove-Item -Path $tempDir -Recurse -Force
                       Write-Host "Temporary directory cleaned up." -ForegroundColor Green
                   }
               } catch {
@@ -159,14 +165,16 @@ jobs:
           Copy-Files
           Cleanup-TempDirectory
 
-
       # Step 4: Cleanup Temporary Directory
       - name: Cleanup Temporary Directory
         if: ${{ always() }}
         run: |
+          $currentDirectory = Get-Location
+          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
+
           try {
-              if (Test-Path "${{ env.TEMP_DIR }}") {
-                  Remove-Item -Path "${{ env.TEMP_DIR }}" -Recurse -Force
+              if (Test-Path $tempDir) {
+                  Remove-Item -Path $tempDir -Recurse -Force
                   Write-Host "Temporary directory cleaned up."
               }
           } catch {
@@ -187,25 +195,25 @@ jobs:
           }
 
   create_disposable_vm_for_image:
-        needs: TransferBuild
-        uses: ./.github/workflows/image_creation.yml
-        with:
-          resource_group: ${{ inputs.resource_group}}
-          vnet_name: ${{ inputs.vnet_name}}
-          subnet_name: "default"
-          version: ${{ inputs.semantic_version}}
-          vm_image_version: ${{ inputs.vm_image_version}}
-          nsg_name: ${{ inputs.nsg_name}}
-          source_files_path: ${{ inputs.azure_file_share_dest_path }}
-          net_location: ${{ inputs.vnet_location}}
-          storage_account_name: "ospclouddevccurebuilds"
-          file_share_name: "ospclouddevccurefileshare"
-      
-        secrets:
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          SAS_TOKEN: ${{ secrets.SAS_TOKEN }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+    needs: TransferBuild
+    uses: ./.github/workflows/image_creation.yml
+    with:
+      resource_group: ${{ inputs.resource_group}}
+      vnet_name: ${{ inputs.vnet_name}}
+      subnet_name: 'default'
+      version: ${{ inputs.semantic_version}}
+      vm_image_version: ${{ inputs.vm_image_version}}
+      nsg_name: ${{ inputs.nsg_name}}
+      source_files_path: ${{ inputs.azure_file_share_dest_path }}
+      net_location: ${{ inputs.vnet_location}}
+      storage_account_name: 'ospclouddevccurebuilds'
+      file_share_name: 'ospclouddevccurefileshare'
+
+    secrets:
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      SAS_TOKEN: ${{ secrets.SAS_TOKEN }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
