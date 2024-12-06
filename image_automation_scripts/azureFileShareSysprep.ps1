@@ -14,6 +14,39 @@ function Set-ExecutionPolicyIfNeeded {
     }
 }
 
+function Set-FirewallRule {
+    param (
+        [string]$IPAddress,
+        [int]$Port,
+        [string]$Group,
+        [string]$Protocol = "TCP"
+    )
+
+    # Enable the firewall for all profiles: Domain, Public, and Private
+    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+
+    # Add a rule to allow inbound traffic to the specified port and IP address
+    New-NetFirewallRule -DisplayName "Allow Inbound to $Port" `
+        -Direction Inbound `
+        -RemoteAddress $IPAddress `
+        -Protocol $Protocol `
+        -LocalPort $Port `
+        -Action Allow `
+        -Group $Group
+
+    # Add a rule to block outbound traffic to the specified port and IP address
+    New-NetFirewallRule -DisplayName "Block Outbound to $Port" `
+        -Direction Outbound `
+        -RemoteAddress $IPAddress `
+        -Protocol $Protocol `
+        -LocalPort $Port `
+        -Action Block `
+        -Group $Group
+
+    # Example usage Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
+
+}
+
 function Install-AzCopy {
     Write-Host "Downloading AzCopy..." -ForegroundColor Green
     Invoke-WebRequest -Uri "https://aka.ms/downloadazcopy-v10-windows" -OutFile "AzCopy.zip" -UseBasicParsing
@@ -65,6 +98,7 @@ try {
     Set-ExecutionPolicyIfNeeded
     Install-AzCopy
     Copy-FilesUsingAzCopy
+    # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Run-Sysprep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
