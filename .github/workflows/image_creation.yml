@@ -3,10 +3,6 @@
 name: Deploy and Image Creation
 
 on:
-  workflow_run:
-    workflows: ['Transfer Build to Azure']
-    types:
-      - completed
   workflow_call:
     inputs:
       resource_group:
@@ -26,6 +22,10 @@ on:
         required: true
         type: string
       version:
+        description: 'Version for Build'
+        required: true
+        type: string
+      vm_image_version:
         description: 'Version for Image tag'
         required: true
         type: string
@@ -39,10 +39,6 @@ on:
         type: string
       file_share_name:
         description: 'Azure File Share Name'
-        required: true
-        type: string
-      storage_account_key:
-        description: 'Azure Storage Account Key'
         required: true
         type: string
       source_files_path:
@@ -62,11 +58,20 @@ on:
       AZURE_CLIENT_SECRET:
         description: The client secret of your Azure AD application.
         required: true
+      SAS_TOKEN:
+        description: The secret for the File Share in Storage Account.
+        required: true
+      ADMIN_USERNAME:
+        description: The username of the Administrator for the VM
+        required: true
+      ADMIN_PASSWORD:
+        description: The password of the Administrator for the VM
+        required: true        
+
 
 jobs:
   deploy_and_create_image:
-    # runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -74,16 +79,15 @@ jobs:
     - name: Azure login
       uses: azure/login@v2
       with:
-        creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
-        # auth-type: IDENTITY
-        # client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        auth-type: IDENTITY
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     - name: variable
       run: |
         az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        echo "VM_NAME=$(echo "ccure${{ inputs.version }}" | tr '.' '-' )"  >> $GITHUB_ENV 
+        echo "VM_NAME=$(echo "${{ inputs.version }}" | tr '.' '-' )"  >> $GITHUB_ENV 
 
     - name: Retrieve VNet and Subnet details
       id: retrieve_vnet_subnet
@@ -104,7 +108,8 @@ jobs:
           --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
           --image Win2022Datacenter \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
-          --admin-username ccureuser --admin-password "YourStrongPassword123!"
+          --admin-username ${{ secrets.ADMIN_USERNAME }} --admin-password ${{ secrets.ADMIN_PASSWORD }} \
+          --security-type Standard
 
     - name: Mount Init Script
       run: |
@@ -112,9 +117,9 @@ jobs:
           --command-id RunPowerShellScript --scripts @image_automation_scripts/azureFileShareSysprep.ps1 \
           --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
                        'FileShareName=${{ inputs.file_share_name }}' \
-                       'StorageAccountKey=${{ inputs.storage_account_key }}' \
+                       'StorageAccountKey=${{ secrets.SAS_TOKEN }}' \
                        'SourceFilesPath=${{ inputs.source_files_path }}' \
-                       'DestinationPath=C:\\Users\\ccureuser\\Desktop\\build'
+                       'DestinationPath=C:\\Users\\${{ secrets.ADMIN_USERNAME }}\\Desktop\\build'
 
     - name: Deallocate Virtual Machine
       run: |
@@ -127,20 +132,11 @@ jobs:
     - name: Create Shared Image Gallery image version
       run: |
         az sig image-version create --resource-group ${{ inputs.resource_group }} \
-          --gallery-name CCURE_image_gallery \
-          --gallery-image-definition ccure-build-images \
-          --gallery-image-version ${{ inputs.version }} \
+          --gallery-name CCURE_image_galley \
+          --gallery-image-definition ccure-image-vm \
+          --gallery-image-version ${{ inputs.vm_image_version }} \
           --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.VM_NAME }}-rg/providers/Microsoft.Compute/virtualMachines/${{ env.VM_NAME }}
 
-
-
-               az sig image-version create --resource-group ${{ inputs.resource_group }} --gallery-name CCURE_image_galley \
-          --gallery-image-definition ${{ inputs.image_name }} --gallery-image-version ${{ inputs.version }} \
-          --virtual-machine /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.resource_group }}/providers/Microsoft.Compute/virtualMachines/${{ inputs.vm_name }}
-
-
-
-          
     - name: Display Image Details
       run: |
         az sig image-definition list --gallery-name CCURE_image_galley --resource-group ${{ inputs.resource_group }}
@@ -152,8 +148,4 @@ jobs:
     - name: Delete Resource Group
       run: | 
         echo "Deleting the Resource Group..."
-        az group delete \
-        -n ${{ inputs.resource_group }} \ 
-        --force-deletion-types Microsoft.Compute/virtualMachines \
-        --yes \
-        --no-wait
+        az group delete -n "${{ env.VM_NAME }}-rg" --force-deletion-types Microsoft.Compute/virtualMachines --yes --no-wait
