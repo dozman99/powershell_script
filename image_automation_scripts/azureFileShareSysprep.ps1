@@ -3,10 +3,9 @@ param (
     [string]$FileShareName,
     [string]$StorageAccountKey,
     [string]$SourceFilesPath,
-    [string]$DestinationPath = "C:\Users\ccureuser\Desktop\build",
+    [string]$DestinationPath = "C:\Program Files\ccure",
     [string]$SysprepPath = "C:\Windows\System32\Sysprep\Sysprep.exe"
 )
-
 function Set-ExecutionPolicyIfNeeded {
     if ((Get-ExecutionPolicy) -ne "RemoteSigned") {
         Write-Host "Setting execution policy to RemoteSigned..." -ForegroundColor Green
@@ -66,16 +65,11 @@ function Install-AzCopy {
 }
 
 function Copy-FilesUsingAzCopy {
-    $sourceUri = "https://$StorageAccountName.file.core.windows.net/$FileShareName/$SourceFilesPath?$StorageAccountKey"
-    if (!(Test-Path $DestinationPath)) {
-        Write-Host "Creating destination path: $DestinationPath" -ForegroundColor Yellow
-        New-Item -ItemType Directory -Path $DestinationPath -Force
-    }
-
+    $sourceUri = "https://$StorageAccountName.file.core.windows.net/$FileShareName/$SourceFilesPath" + "?" + "$StorageAccountKey"
     Write-Host "Copying files from Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$sourceUri", "$DestinationPath", "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
-        Write-Host "Files copied successfully to $DestinationPath." -ForegroundColor Green
+        Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$sourceUri", "`"$DestinationPath`"", "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
+        Write-Host "---Files copied successfully to "`"$DestinationPath`""---" -ForegroundColor Green
     } catch {
         Write-Error "File copy failed: $_.Exception.Message"
         Exit 1

@@ -109,7 +109,7 @@ jobs:
           --image Win2022Datacenter \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ${{ secrets.ADMIN_USERNAME }} --admin-password ${{ secrets.ADMIN_PASSWORD }} \
-          --security-type Standard
+          --security-type Standard --public-ip-address ""
 
     - name: Mount Init Script
       run: |
@@ -117,10 +117,10 @@ jobs:
           --command-id RunPowerShellScript --scripts @image_automation_scripts/azureFileShareSysprep.ps1 \
           --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
                        'FileShareName=${{ inputs.file_share_name }}' \
-                       'StorageAccountKey=${{ secrets.SAS_TOKEN }}' \
-                       'SourceFilesPath=${{ inputs.source_files_path }}' \
-                       'DestinationPath=C:\\Users\\${{ secrets.ADMIN_USERNAME }}\\Desktop\\build'
-
+                       'StorageAccountKey="${{ secrets.SAS_TOKEN }}"' \
+                       'SourceFilesPath="${{ inputs.source_files_path }}\UC_${{ inputs.semantic_version }}"' \
+                       'DestinationPath=C:\Program Files\ccure'
+    
     - name: Deallocate Virtual Machine
       run: |
         az vm deallocate --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}"

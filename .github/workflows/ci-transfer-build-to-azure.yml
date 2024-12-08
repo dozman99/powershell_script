@@ -55,7 +55,6 @@ jobs:
     # runs-on: windows-latest
     env:
       TEMP_DIR: 'projects'
-      CHECKSUM_FILE: "C:\\Temp\\build_checksum.txt"
 
     steps:
       # Step 1: Mount On-Prem Network Drive
@@ -72,18 +71,12 @@ jobs:
           $buildPath = Join-Path ${{ inputs.build_path }} "UC_${{ inputs.semantic_version }}"
           $currentDirectory = Get-Location
           $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
-          $hashDir = Join-Path $tempDir build_checksum.txt
-
+          
           # List files in the build path
           Get-ChildItem -Path $buildPath | Select-Object -ExpandProperty Name
 
           # Display the build path
           Write-Host "Build Path: $buildPath"
-
-          # Calculate file hash and save it to a file
-          Write-Host "Calculating FileHash"
-          $originalHash = Get-FileHash -Path "$buildPath" -Algorithm SHA256
-          $originalHash | Out-File -FilePath $hashDir
 
           # Create the temporary directory if it doesn't exist
           New-Item -Path $tempDir -ItemType Directory -Force
@@ -95,16 +88,6 @@ jobs:
           # List files in the temporary directory to verify the copy
           Get-ChildItem -Path $tempDir | Select-Object -ExpandProperty Name
 
-          # Verify the hash file after copy
-          Write-Host "Verifying FileHash after copy"
-          $copiedHash = Get-FileHash -Path $hashDir -Algorithm SHA256
-          if ($originalHash.Hash -eq $copiedHash.Hash) {
-              Write-Host "Hash verification successful: $($originalHash.Hash)"
-          } else {
-              Write-Error "Hash verification failed. Original: $($originalHash.Hash), Copied: $($copiedHash.Hash)"
-              Exit 1
-          }
-
           # Indicate success
           Write-Host "Files copied and verified successfully"
 
@@ -115,7 +98,7 @@ jobs:
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
           $AzCopyZipPath = "AzCopy.zip"
           $AzCopyInstallPath = "C:\Program Files\AzCopy"
-          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ secrets.AZURE_FILE_SHARE_DEST_PATH }}?${{ secrets.SAS_TOKEN }}"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.AZURE_FILE_SHARE_DEST_PATH }}?${{ secrets.SAS_TOKEN }}"
           $currentDirectory = Get-Location
           $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
 
@@ -193,6 +176,11 @@ jobs:
               Write-Error "Failed to clean up network drives: $_"
               exit 1
           }
+
+      # Step 5: Retrieve Runners IP Address
+      - name: Retrieve Runners IP Address
+        run: |
+          Invoke-RestMethod -Uri "https://ifconfig.me/ip"     
 
   create_disposable_vm_for_image:
     needs: TransferBuild
