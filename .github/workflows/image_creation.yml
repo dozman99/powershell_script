@@ -106,7 +106,7 @@ jobs:
       run: |
         az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
           --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
-          --image Win2022Datacenter \
+          --image microsoftsqlserver:sql2022-ws2022:enterprise-gen2:latest \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ${{ secrets.ADMIN_USERNAME }} --admin-password ${{ secrets.ADMIN_PASSWORD }} \
           --security-type Standard --public-ip-address ""
