@@ -120,7 +120,8 @@ jobs:
           --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
                        'FileShareName=${{ inputs.file_share_name }}' \
                        'StorageAccountKey="${{ secrets.SAS_TOKEN }}"' \
-                       'SourceFilesPath="${{ inputs.source_files_path }}\UC_${{ inputs.semantic_version }}"' \
+                       'BuildFilesPath="${{ inputs.source_files_path }}"' \
+                       'Version="UC_${{ inputs.semantic_version }}"' \
                        'DestinationPath=C:\Program Files\ccure'
     
     - name: Deallocate Virtual Machine

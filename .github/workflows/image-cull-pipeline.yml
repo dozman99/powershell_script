@@ -1,0 +1,146 @@
+# @format
+
+name: Tag and Cleanup Images
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: Name of the image to tag
+        required: true
+        type: string
+      tag:
+        description: Tag to apply to the image
+        default: 'gold'
+        required: true
+        type: string
+      on_prem_map_drive:
+        description: Drive letter for mounting the on-premises network drive
+        default: 'B:'
+        required: false
+        type: string
+      nfs_address:
+        description: The NFS server address
+        required: true
+        type: string
+      azure_file_share_path:
+        description: Azure File Share path
+        required: true
+        type: string
+      image_gallery_name:
+        description: Azure Image Gallery name
+        required: true
+        type: string
+      resource_group:
+        description: Azure Resource Group
+        required: true
+        type: string
+      retention_period:
+        description: Azure Resource Group
+        default: 7
+        required: true
+        type: number
+
+jobs:
+  TagImage:
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+      - name: Tag the Image on-prem
+        shell: pwsh
+        run: |
+          $buildPath = Join-Path -Path "${{ inputs.build_path }}" -ChildPath "UC_${{ inputs.semantic_version }}"
+          Write-Host "Build Path: $buildPath"
+
+          if ($buildPath -notmatch '${{ inputs.tag }}') {
+            $newBuildPath = "$buildPath" + "-${{ inputs.tag }}"
+            Rename-Item -Path $buildPath -NewName $newBuildPath
+            $buildPath = $newBuildPath
+          }
+
+          Write-Host "Files in the ${{ inputs.build_path }} directory:"
+          Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
+          Write-Host "Files processed successfully."
+
+      - name: Tag the Image on image-gallery
+        shell: pwsh
+        run: |
+          $imageName = "${{ inputs.image_name }}"
+          $tag = "${{ inputs.tag }}"
+          Write-Host "Tagging image: $imageName with tag: $tag"
+
+          $resourceGroup = "${{ inputs.resource_group }}"
+          $galleryName = "${{ inputs.image_gallery_name }}"
+
+          az sig image-version update \
+            --resource-group $resourceGroup \
+            --gallery-name $galleryName \
+            --gallery-image-definition $imageName \
+            --set tags.ccure=${{ inputs.tag }} \
+            --set publishingProfile.excludeFromLatest=false #Change whether an image should be included in consideration for latest version in the image definition
+
+          Write-Host "Image tagged successfully in Azure Image Gallery."
+
+  CleanupOldImages:
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+      - name: Mount On-Prem Network Drive
+        run: |
+          net use ${{ inputs.on_prem_map_drive }} /delete /yes
+          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
+          net use
+
+      - name: Delete Old Images from On-Premises
+        run: |
+          $directoryPath = "${{ inputs.on_prem_map_drive }}"
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
+            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
+          } | Remove-Item -Force
+          Write-Host "Old images deleted from on-premises network drive."
+      
+      # Step 5: Unmount Network Drives
+      - name: Unmount Network Drives
+        if: ${{ always() }}
+        run: |
+          try {
+              net use ${{ inputs.on_prem_map_drive }} /delete /yes
+              Write-Host "Network drives cleaned up."
+          } catch {
+              Write-Error "Failed to clean up network drives: $_"
+              exit 1
+          }
+
+      - name: Delete Old Folders from Azure File Share
+        run: |
+          $azurePath = "${{ inputs.azure_file_share_path }}"
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          Write-Host "Retrieving folders older than $threshold in Azure File Share..."
+
+          azcopy list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
+            $itemName = $_.name
+            $itemPath = "$azurePath/$itemName"
+            $lastModified = Get-Date $_.lastModified
+
+            if ($lastModified -lt $threshold) {
+              Write-Host "Deleting folder: $itemPath"
+              azcopy remove "$itemPath" --recursive=true
+            }
+          }
+          Write-Host "Old folders deleted from Azure File Share using azcopy."
+
+      - name: Delete Old Images from Image Gallery
+        shell: pwsh
+        run: |
+          $thresholdDate = (Get-Date).AddDays(-${{ inputs.retention_period }}).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+          az sig image-version list `
+            --resource-group "${{ inputs.resource_group }}" `
+            --gallery-name "${{ inputs.image_gallery_name }}" `
+            --gallery-image-definition "${{ inputs.image_name }}" `
+            --query "[?publishingProfile.publishedDate<'$thresholdDate' && !tags.ccure=='gold'].[name]" `
+            --output tsv |
+          ForEach-Object {
+            Write-Host "Deleting image version: $_"
+            az sig image-version delete `
+              --resource-group "${{ inputs.resource_group }}" `
+              --gallery-name "${{ inputs.image_gallery_name }}" `
+              --gallery-image-definition "${{ inputs.image_name }}" `
+              --gallery-image-version $_
