@@ -92,7 +92,7 @@ jobs:
           Write-Host "Files copied and verified successfully"
 
       # Step 3: Install-AzCopy
-      - name: Install AzCopy
+      - name: Copy-Files to AZ fileshare
         run: |
           $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"

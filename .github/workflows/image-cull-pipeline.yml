@@ -36,77 +36,116 @@ on:
         type: string
       retention_period:
         description: Azure Resource Group
-        default: 7
+        default: 2
         required: true
         type: number
 
 jobs:
-  cull-On-Premises:
-    runs-on: [self-hosted, Windows, C2892M312]
-    steps:
-      - name: Mount On-Prem Network Drive
-        run: |
-          net use ${{ inputs.on_prem_map_drive }} /delete /yes
-          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
-          net use
+  # cull-On-Premises:
+  #   runs-on: [self-hosted, Windows, C2892M312]
+  #   steps:
+  #     - name: Mount On-Prem Network Drive
+  #       run: |
+  #         net use ${{ inputs.on_prem_map_drive }} /delete /yes
+  #         net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
+  #         net use
 
-      - name: Tag the Image On-Premises
-        shell: pwsh
-        run: |
-          $buildPath = Join-Path "${{ inputs.build_path }}"  "UC_${{ inputs.semantic_version }}"
-          Write-Host "Build Path: $buildPath"
+  #     - name: Tag the Image On-Premises
+  #       shell: pwsh
+  #       run: |
+  #         $buildPath = Join-Path "${{ inputs.build_path }}"  "UC_${{ inputs.semantic_version }}"
+  #         Write-Host "Build Path: $buildPath"
 
-          if ($buildPath -notmatch '${{ inputs.tag }}') {
-            $newBuildPath = "$buildPath" + "-${{ inputs.tag }}"
-            Rename-Item -Path $buildPath -NewName $newBuildPath
-            $buildPath = $newBuildPath
-          }
+  #         if ($buildPath -notmatch '${{ inputs.tag }}') {
+  #           $newBuildPath = "$buildPath" + "-${{ inputs.tag }}"
+  #           Rename-Item -Path $buildPath -NewName $newBuildPath
+  #           $buildPath = $newBuildPath
+  #         }
 
-          Write-Host "Files in the ${{ inputs.build_path }} directory:"
-          Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
-          Write-Host "Files processed successfully."
+  #         Write-Host "Files in the ${{ inputs.build_path }} directory:"
+  #         Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
+  #         Write-Host "Files processed successfully."
 
-      - name: Delete Old Images from On-Premises
-        run: |
-          $directoryPath = "${{ inputs.on_prem_map_drive }}"
-          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-          Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
-            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
-          } | Remove-Item -Force
-          Write-Host "Old images deleted from on-premises network drive."
+  #     - name: Delete Old Images from On-Premises
+  #       run: |
+  #         $directoryPath = "${{ inputs.on_prem_map_drive }}"
+  #         $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+  #         Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
+  #           $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
+  #         } | Remove-Item -Force
+  #         Write-Host "Old images deleted from on-premises network drive."
 
-      - name: Unmount Network Drives
-        if: ${{ always() }}
-        run: |
-          try {
-              net use ${{ inputs.on_prem_map_drive }} /delete /yes
-              Write-Host "Network drives cleaned up."
-          } catch {
-              Write-Error "Failed to clean up network drives: $_"
-              exit 1
-          }
+  #     - name: Unmount Network Drives
+  #       if: ${{ always() }}
+  #       run: |
+  #         try {
+  #             net use ${{ inputs.on_prem_map_drive }} /delete /yes
+  #             Write-Host "Network drives cleaned up."
+  #         } catch {
+  #             Write-Error "Failed to clean up network drives: $_"
+  #             exit 1
+  #         }
 
   cull-image-az-fileshare:
     runs-on: [self-hosted, Windows, C2892M312]
     steps:
+      - run: |
+          Write-Host "Setting up environment variables..."
+          $global:AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
+          $global:AzCopyZipPath = "AzCopy.zip"
+          $global:AzCopyInstallPath = "C:\Program Files\AzCopy"
 
-      - name: Delete Old Folders from Azure File Share
-        run: |
-          $azurePath = "${{ inputs.azure_file_share_path }}"
-          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-          Write-Host "Retrieving folders older than $threshold in Azure File Share..."
+          function Install-AzCopy {
+              Write-Host "Downloading AzCopy..." -ForegroundColor Green
+              Invoke-WebRequest -Uri $global:AzCopyZipUrl -OutFile $global:AzCopyZipPath -UseBasicParsing
 
-          azcopy list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
-            $itemName = $_.name
-            $itemPath = "$azurePath/$itemName"
-            $lastModified = Get-Date $_.lastModified
+              Write-Host "Extracting AzCopy..." -ForegroundColor Green
+              Expand-Archive -Path $global:AzCopyZipPath -DestinationPath $global:AzCopyInstallPath -Force
 
-            if ($lastModified -lt $threshold) {
-              Write-Host "Deleting folder: $itemPath"
-              azcopy remove "$itemPath" --recursive=true
-            }
+              Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
+              Remove-Item -Path $global:AzCopyZipPath -Force
+
+              $global:azCopyPath = (Get-ChildItem $global:AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+              if (!(Test-Path $global:azCopyPath)) {
+                  Write-Error "AzCopy installation failed. Ensure the file exists in '$global:AzCopyInstallPath'."
+                  Exit 1
+              }
+              Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
           }
-          Write-Host "Old folders deleted from Azure File Share using azcopy."
+
+          function Delete-OldFoldersFromAzureFileShare {
+              param (
+                  [string]$azurePath,
+                  [int]$retentionPeriod
+              )
+
+              $threshold = (Get-Date).AddDays(-$retentionPeriod)
+
+              Write-Host "Retrieving folders older than $threshold in Azure File Share..."
+
+              $global:azCopyPath list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
+                  $itemName = $_.name
+                  $itemPath = "$azurePath/$itemName"
+                  $lastModified = Get-Date $_.lastModified
+
+                  if ($lastModified -lt $threshold) {
+                      Write-Host "Deleting folder: $itemPath"
+                      $global:azCopyPath remove "$itemPath" --recursive=true
+                  }
+              }
+              Write-Host "Old folders deleted from Azure File Share using azcopy."
+          }
+
+          # Call the Install-AzCopy function
+          Install-AzCopy
+
+          # Define the Azure File Share path and retention period
+          $azurePath = "${{ inputs.azure_file_share_path }}"
+          $retentionPeriod = ${{ inputs.retention_period }}
+
+          # Call the Delete-OldFoldersFromAzureFileShare function
+          Delete-OldFoldersFromAzureFileShare -azurePath $azurePath -retentionPeriod $retentionPeriod
+
 
   cull-image-gallery:
     runs-on: [self-hosted, Windows, C2892M312]
