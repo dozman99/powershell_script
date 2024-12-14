@@ -147,7 +147,6 @@ jobs:
           # Call the Delete-OldFoldersFromAzureFileShare function
           Delete-OldFoldersFromAzureFileShare -azurePath $azurePath -retentionPeriod $retentionPeriod
 
-
   cull-image-gallery:
     # runs-on: [self-hosted, Windows, C2892M312]
     runs-on: windows-latest
@@ -155,10 +154,11 @@ jobs:
       - name: Azure login
         uses: azure/login@v2
         with:
-          auth-type: IDENTITY
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+          # auth-type: IDENTITY
+          # client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Tag the Image on image-gallery
         shell: pwsh
