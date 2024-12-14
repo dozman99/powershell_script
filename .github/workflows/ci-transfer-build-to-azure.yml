@@ -12,8 +12,8 @@ on:
         description: Semantic version to locate the build
         required: true
         type: string
-      azure_file_share_dest_path:
-        description: Destination path to the second Azure file share (new server)
+      azure_file_share_path:
+        description: Destination path to Azure file share (new server)
         required: true
         type: string
       nfs_address:
@@ -98,7 +98,7 @@ jobs:
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
           $AzCopyZipPath = "AzCopy.zip"
           $AzCopyInstallPath = "C:\Program Files\AzCopy"
-          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.AZURE_FILE_SHARE_DEST_PATH }}?${{ secrets.SAS_TOKEN }}"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
           $currentDirectory = Get-Location
           $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
 
@@ -192,7 +192,7 @@ jobs:
       version: ${{ inputs.semantic_version}}
       vm_image_version: ${{ inputs.vm_image_version}}
       nsg_name: ${{ inputs.nsg_name}}
-      source_files_path: ${{ inputs.azure_file_share_dest_path }}
+      source_files_path: ${{ inputs.azure_file_share_path }}
       net_location: ${{ inputs.vnet_location}}
       storage_account_name: 'ospclouddevccurebuilds'
       file_share_name: 'ospclouddevccurefileshare'

@@ -24,6 +24,7 @@ on:
         type: string
       azure_file_share_path:
         description: Azure File Share path
+        default: build
         required: true
         type: string
       image_gallery_name:
@@ -141,7 +142,7 @@ jobs:
           Install-AzCopy
 
           # Define the Azure File Share path and retention period
-          $azurePath = "${{ inputs.azure_file_share_path }}"
+          $azurePath = "https://tfstateconclase.file.core.windows.net/testing-sprint/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
           $retentionPeriod = ${{ inputs.retention_period }}
 
           # Call the Delete-OldFoldersFromAzureFileShare function
@@ -183,16 +184,19 @@ jobs:
         shell: pwsh
         run: |
           $thresholdDate = (Get-Date).AddDays(-${{ inputs.retention_period }}).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+          $image_gallery_name = CCURE_image_galley 
+          $image_name = ccure-image-vm
+
           az sig image-version list `
             --resource-group "${{ inputs.resource_group }}" `
-            --gallery-name "${{ inputs.image_gallery_name }}" `
-            --gallery-image-definition "${{ inputs.image_name }}" `
+            --gallery-name CCURE_image_galley `
+            --gallery-image-definition ccure-image-vm `
             --query "[?publishingProfile.publishedDate<'$thresholdDate' && !tags.ccure=='gold'].[name]" `
             --output tsv |
           ForEach-Object {
             Write-Host "Deleting image version: $_"
             az sig image-version delete `
               --resource-group "${{ inputs.resource_group }}" `
-              --gallery-name "${{ inputs.image_gallery_name }}" `
-              --gallery-image-definition "${{ inputs.image_name }}" `
+              --gallery-name $image_gallery_name `
+              --gallery-image-definition $image_name `
               --gallery-image-version $_
