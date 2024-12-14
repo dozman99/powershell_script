@@ -41,13 +41,19 @@ on:
         type: number
 
 jobs:
-  TagImage:
+  cull-On-Premises:
     runs-on: [self-hosted, Windows, C2892M312]
     steps:
-      - name: Tag the Image on-prem
+      - name: Mount On-Prem Network Drive
+        run: |
+          net use ${{ inputs.on_prem_map_drive }} /delete /yes
+          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
+          net use
+
+      - name: Tag the Image On-Premises
         shell: pwsh
         run: |
-          $buildPath = Join-Path -Path "${{ inputs.build_path }}" -ChildPath "UC_${{ inputs.semantic_version }}"
+          $buildPath = Join-Path "${{ inputs.build_path }}"  "UC_${{ inputs.semantic_version }}"
           Write-Host "Build Path: $buildPath"
 
           if ($buildPath -notmatch '${{ inputs.tag }}') {
@@ -59,6 +65,59 @@ jobs:
           Write-Host "Files in the ${{ inputs.build_path }} directory:"
           Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
           Write-Host "Files processed successfully."
+
+      - name: Delete Old Images from On-Premises
+        run: |
+          $directoryPath = "${{ inputs.on_prem_map_drive }}"
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
+            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
+          } | Remove-Item -Force
+          Write-Host "Old images deleted from on-premises network drive."
+
+      - name: Unmount Network Drives
+        if: ${{ always() }}
+        run: |
+          try {
+              net use ${{ inputs.on_prem_map_drive }} /delete /yes
+              Write-Host "Network drives cleaned up."
+          } catch {
+              Write-Error "Failed to clean up network drives: $_"
+              exit 1
+          }
+
+  cull-image-az-fileshare:
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+
+      - name: Delete Old Folders from Azure File Share
+        run: |
+          $azurePath = "${{ inputs.azure_file_share_path }}"
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          Write-Host "Retrieving folders older than $threshold in Azure File Share..."
+
+          azcopy list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
+            $itemName = $_.name
+            $itemPath = "$azurePath/$itemName"
+            $lastModified = Get-Date $_.lastModified
+
+            if ($lastModified -lt $threshold) {
+              Write-Host "Deleting folder: $itemPath"
+              azcopy remove "$itemPath" --recursive=true
+            }
+          }
+          Write-Host "Old folders deleted from Azure File Share using azcopy."
+
+  cull-image-gallery:
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          auth-type: IDENTITY
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Tag the Image on image-gallery
         shell: pwsh
@@ -78,54 +137,6 @@ jobs:
             --set publishingProfile.excludeFromLatest=false #Change whether an image should be included in consideration for latest version in the image definition
 
           Write-Host "Image tagged successfully in Azure Image Gallery."
-
-  CleanupOldImages:
-    runs-on: [self-hosted, Windows, C2892M312]
-    steps:
-      - name: Mount On-Prem Network Drive
-        run: |
-          net use ${{ inputs.on_prem_map_drive }} /delete /yes
-          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
-          net use
-
-      - name: Delete Old Images from On-Premises
-        run: |
-          $directoryPath = "${{ inputs.on_prem_map_drive }}"
-          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-          Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
-            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
-          } | Remove-Item -Force
-          Write-Host "Old images deleted from on-premises network drive."
-      
-      # Step 5: Unmount Network Drives
-      - name: Unmount Network Drives
-        if: ${{ always() }}
-        run: |
-          try {
-              net use ${{ inputs.on_prem_map_drive }} /delete /yes
-              Write-Host "Network drives cleaned up."
-          } catch {
-              Write-Error "Failed to clean up network drives: $_"
-              exit 1
-          }
-
-      - name: Delete Old Folders from Azure File Share
-        run: |
-          $azurePath = "${{ inputs.azure_file_share_path }}"
-          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-          Write-Host "Retrieving folders older than $threshold in Azure File Share..."
-
-          azcopy list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
-            $itemName = $_.name
-            $itemPath = "$azurePath/$itemName"
-            $lastModified = Get-Date $_.lastModified
-
-            if ($lastModified -lt $threshold) {
-              Write-Host "Deleting folder: $itemPath"
-              azcopy remove "$itemPath" --recursive=true
-            }
-          }
-          Write-Host "Old folders deleted from Azure File Share using azcopy."
 
       - name: Delete Old Images from Image Gallery
         shell: pwsh
