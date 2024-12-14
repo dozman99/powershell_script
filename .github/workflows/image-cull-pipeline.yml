@@ -87,7 +87,8 @@ jobs:
   #         }
 
   cull-image-az-fileshare:
-    runs-on: [self-hosted, Windows, C2892M312]
+    # runs-on: [self-hosted, Windows, C2892M312]
+    runs-on: windows-latest
     steps:
       - run: |
           Write-Host "Setting up environment variables..."
@@ -148,7 +149,8 @@ jobs:
 
 
   cull-image-gallery:
-    runs-on: [self-hosted, Windows, C2892M312]
+    # runs-on: [self-hosted, Windows, C2892M312]
+    runs-on: windows-latest
     steps:
       - name: Azure login
         uses: azure/login@v2
