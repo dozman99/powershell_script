@@ -8,9 +8,21 @@ on:
         description: Name of the image to tag
         required: true
         type: string
+      semantic_version:
+        description: Semantic version to locate the build
+        required: true
+        type: string
       tag:
         description: Tag to apply to the image
         default: 'gold'
+        required: true
+        type: string
+      retention_period:
+        description: in days after which it will be deleted 
+        required: true
+        type: number
+      nfs_address:
+        description: The NFS server address
         required: true
         type: string
       on_prem_map_drive:
@@ -18,8 +30,8 @@ on:
         default: 'B:'
         required: false
         type: string
-      nfs_address:
-        description: The NFS server address
+      build_path:
+        description: Base path where builds are located
         required: true
         type: string
       azure_file_share_path:
@@ -27,75 +39,73 @@ on:
         default: build
         required: true
         type: string
-      image_gallery_name:
-        description: Azure Image Gallery name
-        required: true
-        type: string
       resource_group:
         description: Azure Resource Group
         required: true
         type: string
-      retention_period:
-        description: in days after which it will be deleted 
-        required: true
-        type: number
+
 
 jobs:
-  # cull-On-Premises:
-  #   runs-on: [self-hosted, Windows, C2892M312]
-  #   steps:
-  #     - name: Mount On-Prem Network Drive
-  #       run: |
-  #         net use ${{ inputs.on_prem_map_drive }} /delete /yes
-  #         net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
-  #         net use
+  cull-On-Premises:
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+      - name: Mount On-Prem Network Drive
+        run: |
+          net use ${{ inputs.on_prem_map_drive }} /delete /yes
+          net use ${{ inputs.on_prem_map_drive }} ${{ inputs.nfs_address }} /u:${{ secrets.ONPREM_SA_USER }} "${{ secrets.ONPREM_SA_PASS }}"
+          net use
 
-  #     - name: Tag the Image On-Premises
-  #       shell: pwsh
-  #       run: |
-  #         $buildPath = Join-Path "${{ inputs.build_path }}"  "UC_${{ inputs.semantic_version }}"
-  #         Write-Host "Build Path: $buildPath"
+      - name: Tag the Image On-Premises
+        shell: pwsh
+        run: |
+          $buildPath = Join-Path "${{ inputs.build_path }}"  "UC_${{ inputs.semantic_version }}"
+          Write-Host "Build Path: $buildPath"
 
-  #         if ($buildPath -notmatch '${{ inputs.tag }}') {
-  #           $newBuildPath = "$buildPath" + "-${{ inputs.tag }}"
-  #           Rename-Item -Path $buildPath -NewName $newBuildPath
-  #           $buildPath = $newBuildPath
-  #         }
+          if ($buildPath -notmatch '${{ inputs.tag }}') {
+            $newBuildPath = "$buildPath" + "-${{ inputs.tag }}"
+            Rename-Item -Path $buildPath -NewName $newBuildPath
+          }
 
-  #         Write-Host "Files in the ${{ inputs.build_path }} directory:"
-  #         Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
-  #         Write-Host "Files processed successfully."
+          Write-Host "Files in the ${{ inputs.build_path }} directory:"
+          Get-ChildItem -Path "${{ inputs.build_path }}" | Select-Object -ExpandProperty Name
+          Write-Host "Files processed successfully."
 
-  #     - name: Delete Old Images from On-Premises
-  #       run: |
-  #         $directoryPath = "${{ inputs.on_prem_map_drive }}"
-  #         $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-  #         Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object {
-  #           $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
-  #         } | Remove-Item -Force
-  #         Write-Host "Old images deleted from on-premises network drive."
+      - name: Delete Old Directories from On-Premises
+        run: |
+          $directoryPath = ${{ inputs.build_path }}
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
 
-  #     - name: Unmount Network Drives
-  #       if: ${{ always() }}
-  #       run: |
-  #         try {
-  #             net use ${{ inputs.on_prem_map_drive }} /delete /yes
-  #             Write-Host "Network drives cleaned up."
-  #         } catch {
-  #             Write-Error "Failed to clean up network drives: $_"
-  #             exit 1
-  #         }
+          Write-Host "Checking for directories in $directoryPath older than $threshold..."
+
+          Get-ChildItem -Path $directoryPath -Directory -Recurse | Where-Object {
+            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
+          } | ForEach-Object {
+            Write-Host "Deleting directory: $($_.FullName)"
+            Remove-Item -Path $_.FullName -Recurse -Force
+          }
+
+          Write-Host "Old directories and their contents deleted from the on-premises network drive."
+
+      - name: Unmount Network Drives
+        if: ${{ always() }}
+        run: |
+          try {
+              net use ${{ inputs.on_prem_map_drive }} /delete /yes
+              Write-Host "Network drives cleaned up."
+          } catch {
+              Write-Error "Failed to clean up network drives: $_"
+              exit 1
+          }
 
   cull-image-az-fileshare:
-    # runs-on: [self-hosted, Windows, C2892M312]
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, C2892M312]
     steps:
       - run: |
           Write-Host "Setting up environment variables..."
           AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
           AzCopyZipPath = "AzCopy.zip"
           AzCopyInstallPath = "C:\Program Files\AzCopy"
-          $azurePath = "https://tfstateconclase.file.core.windows.net/testing-sprint/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
+          $azurePath = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
 
           function Install-AzCopy {
               Write-Host "Downloading AzCopy..." -ForegroundColor Green
@@ -124,54 +134,62 @@ jobs:
 
 
   cull-image-gallery:
-    # runs-on: [self-hosted, Windows, C2892M312]
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, C2892M312]
     steps:
       - name: Azure login
         uses: azure/login@v2
         with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
-          # auth-type: IDENTITY
-          # client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          auth-type: IDENTITY
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Tag the Image on image-gallery
+      - name: Tag the Image on Image Gallery
         shell: pwsh
         run: |
-          $imageName = "${{ inputs.image_name }}"
+          # Define input variables
+          $imageName = "ccure-image-vm"
           $tag = "${{ inputs.tag }}"
+          $resourceGroup = "${{ inputs.resource_group }}"
+          $imageGalleryName = "CCURE_image_galley"
+
           Write-Host "Tagging image: $imageName with tag: $tag"
 
-          $resourceGroup = "${{ inputs.resource_group }}"
-          $galleryName = "${{ inputs.image_gallery_name }}"
-
-          az sig image-version update \
-            --resource-group $resourceGroup \
-            --gallery-name $galleryName \
-            --gallery-image-definition $imageName \
-            --set tags.ccure=${{ inputs.tag }} \
-            --set publishingProfile.excludeFromLatest=false #Change whether an image should be included in consideration for latest version in the image definition
+          # Update the image version with the specified tag
+          az sig image-version update `
+            --resource-group $resourceGroup `
+            --gallery-name $imageGalleryName `
+            --gallery-image-definition $imageName `
+            --set tags.ccure=$tag `
+            --set publishingProfile.excludeFromLatest=false
 
           Write-Host "Image tagged successfully in Azure Image Gallery."
 
       - name: Delete Old Images from Image Gallery
         shell: pwsh
         run: |
+          # Define input variables
           $thresholdDate = (Get-Date).AddDays(-${{ inputs.retention_period }}).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
-          $image_gallery_name = CCURE_image_galley 
-          $image_name = ccure-image-vm
+          $resourceGroup = "${{ inputs.resource_group }}"
+          $imageGalleryName = "CCURE_image_galley"
+          $imageName = "ccure-image-vm"
 
+          Write-Host "Threshold date for deletion: $thresholdDate"
+          Write-Host "Fetching old image versions from Image Gallery: $imageGalleryName, Image: $imageName"
+
+          # List and delete old image versions
           az sig image-version list `
-            --resource-group "${{ inputs.resource_group }}" `
-            --gallery-name CCURE_image_galley `
-            --gallery-image-definition ccure-image-vm `
-            --query "[?publishingProfile.publishedDate >= '$thresholdDate' && !(tags.ccure == 'gold')].[name]" `
-            --output tsv |
-          ForEach-Object {
-            Write-Host "Deleting image version: $_"
-            az sig image-version delete `
-              --resource-group "${{ inputs.resource_group }}" `
-              --gallery-name $image_gallery_name `
-              --gallery-image-definition $image_name `
-              --gallery-image-version $_
+            --resource-group $resourceGroup `
+            --gallery-name $imageGalleryName `
+            --gallery-image-definition $imageName `
+            --query "[?publishingProfile.publishedDate < '$thresholdDate' && !(tags.ccure == 'gold')].[name]" `
+            --output tsv | ForEach-Object {
+              Write-Host "Deleting image version: $_"
+              az sig image-version delete `
+                --resource-group $resourceGroup `
+                --gallery-name $imageGalleryName `
+                --gallery-image-definition $imageName `
+                --gallery-image-version $_
+            }
+
+          Write-Host "Old image versions deleted successfully from Azure Image Gallery."

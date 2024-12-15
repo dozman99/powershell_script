@@ -68,7 +68,6 @@ on:
         description: The password of the Administrator for the VM
         required: true        
 
-
 jobs:
   deploy_and_create_image:
     # runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
