@@ -36,8 +36,7 @@ on:
         required: true
         type: string
       retention_period:
-        description: Azure Resource Group
-        default: 2
+        description: in days after which it will be deleted 
         required: true
         type: number
 
@@ -93,60 +92,36 @@ jobs:
     steps:
       - run: |
           Write-Host "Setting up environment variables..."
-          $global:AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
-          $global:AzCopyZipPath = "AzCopy.zip"
-          $global:AzCopyInstallPath = "C:\Program Files\AzCopy"
+          AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
+          AzCopyZipPath = "AzCopy.zip"
+          AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $azurePath = "https://tfstateconclase.file.core.windows.net/testing-sprint/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
 
           function Install-AzCopy {
               Write-Host "Downloading AzCopy..." -ForegroundColor Green
-              Invoke-WebRequest -Uri $global:AzCopyZipUrl -OutFile $global:AzCopyZipPath -UseBasicParsing
+              Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
 
               Write-Host "Extracting AzCopy..." -ForegroundColor Green
-              Expand-Archive -Path $global:AzCopyZipPath -DestinationPath $global:AzCopyInstallPath -Force
+              Expand-Archive -Path $AzCopyZipPath -DestinationPath $AzCopyInstallPath -Force
 
               Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
-              Remove-Item -Path $global:AzCopyZipPath -Force
+              Remove-Item -Path $AzCopyZipPath -Force
 
-              $global:azCopyPath = (Get-ChildItem $global:AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+              $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
               if (!(Test-Path $global:azCopyPath)) {
-                  Write-Error "AzCopy installation failed. Ensure the file exists in '$global:AzCopyInstallPath'."
+                  Write-Error "AzCopy installation failed. Ensure the file exists in '$AzCopyInstallPath'."
                   Exit 1
               }
               Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
           }
 
-          function Delete-OldFoldersFromAzureFileShare {
-              param (
-                  [string]$azurePath,
-                  [int]$retentionPeriod
-              )
-
-              $threshold = (Get-Date).AddDays(-$retentionPeriod)
-
-              Write-Host "Retrieving folders older than $threshold in Azure File Share..."
-
-              $global:azCopyPath list "$azurePath" --output json | ConvertFrom-Json | ForEach-Object {
-                  $itemName = $_.name
-                  $itemPath = "$azurePath/$itemName"
-                  $lastModified = Get-Date $_.lastModified
-
-                  if ($lastModified -lt $threshold) {
-                      Write-Host "Deleting folder: $itemPath"
-                      $global:azCopyPath remove "$itemPath" --recursive=true
-                  }
-              }
-              Write-Host "Old folders deleted from Azure File Share using azcopy."
-          }
-
           # Call the Install-AzCopy function
           Install-AzCopy
 
-          # Define the Azure File Share path and retention period
-          $azurePath = "https://tfstateconclase.file.core.windows.net/testing-sprint/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
-          $retentionPeriod = ${{ inputs.retention_period }}
+          Write-Host "Deleting folders in AZ fileshare"
+          $global:azCopyPath remove $azurePath --recursive=true
 
-          # Call the Delete-OldFoldersFromAzureFileShare function
-          Delete-OldFoldersFromAzureFileShare -azurePath $azurePath -retentionPeriod $retentionPeriod
+
 
   cull-image-gallery:
     # runs-on: [self-hosted, Windows, C2892M312]
@@ -191,7 +166,7 @@ jobs:
             --resource-group "${{ inputs.resource_group }}" `
             --gallery-name CCURE_image_galley `
             --gallery-image-definition ccure-image-vm `
-            --query "[?publishingProfile.publishedDate<'$thresholdDate' && !tags.ccure=='gold'].[name]" `
+            --query "[?publishingProfile.publishedDate >= '$thresholdDate' && !(tags.ccure == 'gold')].[name]" `
             --output tsv |
           ForEach-Object {
             Write-Host "Deleting image version: $_"

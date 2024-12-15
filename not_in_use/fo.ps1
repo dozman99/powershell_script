@@ -1,0 +1,67 @@
+Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2215202&clcid=0x409&culture=en-us&country=us" -OutFile "C:\Setup.exe"
+
+$installerPath = "F:\SQL 2019\Media"
+$server='RYU'
+$INSTALLSHAREDDIR="F:\SQL 2019\SQL19NEW"
+$INSTALLSHAREDWOWDIR='F:\SQL 2019\SQL19NEW'
+$INSTANCEDIR='F:\SQL 2019\SQL19NEW'
+$SQLTEMPDBDIR='F:\SQL 2019\SQL19NEW'
+$SQLBACKUPDIR='F:\SQL 2019\SQL19NEW'
+$SQLUSERDBLOGDIR='F:\SQL 2019\SQL19NEW'
+$SQLUSERDBDIR='F:\SQL 2019\SQL19NEW'
+$SQLUSERDBLOGDIR='F:\SQL 2019\SQL19NEW'
+
+$InstanceName = "SQL19NEW"
+$saPassword = "admin@123"
+
+function INSTALL_SQL {
+
+
+
+
+setup.exe /q /ACTION=CompleteImage /INSTANCENAME=DEFAULTINST /INSTANCEID=ccure /SQLSVCACCOUNT="ccure" /SQLSVCPASSWORD="ThisIsMyPass4now.1]" /SQLSYSADMINACCOUNTS="adminccure" /AGTSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE" /IACCEPTSQLSERVERLICENSETERMS
+
+$params="setup.exe /QUIETSIMPLE /IAcceptSQLServerLicenseTerms /Action=install /Features=`"SQL`" /InstanceName=$InstanceName /SQLSVCACCOUNT=`"NT Authority\System`" /SQLSYSADMINACCOUNTS=`"RYU\ryush`" /AGTSVCACCOUNT=`"NT Authority\system`" /SECURITYMODE=`"SQL`" /SAPWD=$saPassword  /INSTANCEDIR=`"$INSTALLSHAREDDIR`" /SQLTEMPDBDIR=`"$SQLTEMPDBDIR`" /SQLUSERDBDIR=`"$SQLUSERDBDIR`" /SQLUSERDBLOGDIR=`"$SQLUSERDBLOGDIR`"  /SQLBACKUPDIR=`"$SQLBACKUPDIR`" "
+$params
+ 
+$setup=$params|Out-File c:\temp\install.bat -Encoding ascii
+
+#Start-Process -FilePath $installerPath  -ArgumentList $params -Verb runas -Wait
+cd $installerPath 
+c:\temp\install.bat
+
+ }
+
+
+INSTALL_SQL
+
+
+
+
+
+
+
+Setup.exe /q /ACTION=PrepareImage l /FEATURES=SQLEngine /InstanceID =<MYINST> /IACCEPTSQLSERVERLICENSETERMS 
+
+setup.exe /q /ACTION=RemoveNode /INSTANCENAME="<Insert Instance Name>" [/INDICATEPROGRESS] /CONFIRMIPDEPENDENCYCHANGE=0
+
+
+setup.exe /q /ACTION=PrepareImage /FEATURES=SQL,RS /InstanceID =<MYINST> /IACCEPTSQLSERVERLICENSETERMS
+
+
+
+
+setup.exe /q /ACTION=CompleteImage /INSTANCENAME=DEFAULTINST /INSTANCEID=ccure /SQLSVCACCOUNT="ccure" /SQLSVCPASSWORD="ThisIsMyPass4now.1]" /SQLSYSADMINACCOUNTS="adminccure" /AGTSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE" /IACCEPTSQLSERVERLICENSETERMS
+
+
+
+
+
+setup.exe /Q /IACCEPTSQLSERVERLICENSETERMS /ACTION="install"
+/PID="AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" /FEATURES=SQL,AS,IS
+/INSTANCENAME=MSSQLSERVER /SQLSVCACCOUNT="MyDomain\MyAccount"
+/SQLSVCPASSWORD="************" /SQLSYSADMINACCOUNTS="MyDomain\MyAccount "
+/AGTSVCACCOUNT="MyDomain\MyAccount" /AGTSVCPASSWORD="************"
+/ASSVCACCOUNT="MyDomain\MyAccount" /ASSVCPASSWORD="************"
+/ISSVCACCOUNT="MyDomain\MyAccount" /ISSVCPASSWORD="************"
+/ASSYSADMINACCOUNTS="MyDomain\MyAccount"
