@@ -4,10 +4,6 @@ name: Tag and Cleanup Images
 on:
   workflow_dispatch:
     inputs:
-      image_name:
-        description: Name of the image to tag
-        required: true
-        type: string
       semantic_version:
         description: Semantic version to locate the build
         required: true
@@ -29,6 +25,10 @@ on:
         description: Drive letter for mounting the on-premises network drive
         default: 'B:'
         required: false
+        type: string
+      vm_image_version:
+        description: 'VM Image Version using semantic versioning'
+        required: true
         type: string
       build_path:
         description: Base path where builds are located
@@ -73,7 +73,8 @@ jobs:
       - name: Delete Old Directories from On-Premises
         run: |
           $directoryPath = ${{ inputs.build_path }}
-          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          # $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
+          $threshold = (Get-Date).AddMinutes(-7).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
           Write-Host "Checking for directories in $directoryPath older than $threshold..."
 
@@ -152,6 +153,7 @@ jobs:
           $tag = "${{ inputs.tag }}"
           $resourceGroup = "${{ inputs.resource_group }}"
           $imageGalleryName = "CCURE_image_galley"
+          $imageVersion = "${{ inputs.vm_image_version }}"
 
           Write-Host "Tagging image: $imageName with tag: $tag"
 
@@ -160,6 +162,7 @@ jobs:
             --resource-group $resourceGroup `
             --gallery-name $imageGalleryName `
             --gallery-image-definition $imageName `
+            --gallery-image-version $imageVersion `
             --set tags.ccure=$tag `
             --set publishingProfile.excludeFromLatest=false
 
@@ -173,6 +176,8 @@ jobs:
           $resourceGroup = "${{ inputs.resource_group }}"
           $imageGalleryName = "CCURE_image_galley"
           $imageName = "ccure-image-vm"
+          $tag = "${{ inputs.tag }}"
+
 
           Write-Host "Threshold date for deletion: $thresholdDate"
           Write-Host "Fetching old image versions from Image Gallery: $imageGalleryName, Image: $imageName"
@@ -182,7 +187,7 @@ jobs:
             --resource-group $resourceGroup `
             --gallery-name $imageGalleryName `
             --gallery-image-definition $imageName `
-            --query "[?publishingProfile.publishedDate < '$thresholdDate' && !(tags.ccure == 'gold')].[name]" `
+            --query "[?publishingProfile.publishedDate < '$thresholdDate' && !(tags.ccure == '$tag')].[name]" `
             --output tsv | ForEach-Object {
               Write-Host "Deleting image version: $_"
               az sig image-version delete `
