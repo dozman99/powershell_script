@@ -113,7 +113,7 @@ function Add-UnattendFile {
       <RunSynchronous>
         <RunSynchronousCommand>
           <Order>1</Order>
-          <Path>powershell.exe -NoLogo -ExecutionPolicy Bypass -File "C:\Program Files\ccure\unattend.xml"</Path>
+          <Path>powershell.exe -NoLogo -ExecutionPolicy Bypass -File "C:\Program Files\ccure\ccureAppInstall.ps1"</Path>
           <Description>Run Application Install Script</Description>
         </RunSynchronousCommand>
       </RunSynchronous>
