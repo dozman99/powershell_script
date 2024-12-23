@@ -28,7 +28,6 @@ function Set-FirewallRule {
 
     # Enable the firewall for all profiles: Domain, Public, and Private
     Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
-
     # Add a rule to allow inbound traffic to the specified port and IP address
     New-NetFirewallRule -DisplayName "Allow Inbound to $Port" `
         -Direction Inbound `
@@ -37,7 +36,6 @@ function Set-FirewallRule {
         -LocalPort $Port `
         -Action Allow `
         -Group $Group
-
     # Add a rule to block outbound traffic to the specified port and IP address
     New-NetFirewallRule -DisplayName "Block Outbound to $Port" `
         -Direction Outbound `
@@ -46,17 +44,14 @@ function Set-FirewallRule {
         -LocalPort $Port `
         -Action Block `
         -Group $Group
-
     # Example usage Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
 }
 
 function Install-AzCopy {
     Write-Host "Downloading AzCopy..." -ForegroundColor Green
     Invoke-WebRequest -Uri "https://aka.ms/downloadazcopy-v10-windows" -OutFile "AzCopy.zip" -UseBasicParsing
-
     Write-Host "Extracting AzCopy..." -ForegroundColor Green
     Expand-Archive -Path "AzCopy.zip" -DestinationPath "C:\Program Files\AzCopy" -Force
-
     Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
     Remove-Item -Path "AzCopy.zip" -Force
 
@@ -80,7 +75,6 @@ function Copy-BuildFilesUsingAzCopy {
     }
 }
 
-
 function Add-GlobalEnvironmentVariable {
     param (
         [Parameter(Mandatory = $true)]
@@ -93,7 +87,6 @@ function Add-GlobalEnvironmentVariable {
     try {
         # Add the environment variable to the registry
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name $Name -Value $Value -Force
-
         # Notify the system of the environment variable change
         [Environment]::SetEnvironmentVariable($Name, $Value, [System.EnvironmentVariableTarget]::Machine)
 
@@ -103,10 +96,9 @@ function Add-GlobalEnvironmentVariable {
     }
 }
 
-
 function Add-UnattendFile {
     param (
-        
+        [Parameter(Mandatory = $true)]
         [string]$UnattendFilePath,    # Path to save the unattend.xml file
 
         [Parameter(Mandatory = $true)]
@@ -142,8 +134,6 @@ function Add-UnattendFile {
     }
 }
 
-
-
 function Push-SystemPrep {
     Write-Host "Running Sysprep..." -ForegroundColor Green
     try {
@@ -154,7 +144,6 @@ function Push-SystemPrep {
         Exit 1
     }
 }
-
 
 # Main script execution
 try {
