@@ -95,48 +95,36 @@ function Add-GlobalEnvironmentVariable {
     }
 }
 
-function Add-UnattendFile {
+function Set-RunOnceKey {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$UnattendFilePath    # Path to save the unattend.xml file
-
-        # [Parameter(Mandatory = $true)]
-        # [string]$AppInstallScriptPath # Path to the application install script
+        [string]$KeyName,          # The name of the RunOnce entry
+        [string]$Command           # The command to execute
     )
 
-    # Create the XML content dynamically
-    $xmlContent = @"
-<?xml version="1.0" encoding="utf-8"?>
-<unattend xmlns="urn:schemas-microsoft-com:unattend">
-  <settings pass="oobeSystem">
-    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-      <RunSynchronous>
-        <RunSynchronousCommand>
-          <Order>1</Order>
-          <Path>powershell.exe -NoLogo -ExecutionPolicy Bypass -File "C:\Program Files\ccure\ccureAppInstall.ps1"</Path>
-          <Description>Run Application Install Script</Description>
-        </RunSynchronousCommand>
-      </RunSynchronous>
-    </component>
-  </settings>
-</unattend>
+    # Registry path for system-wide RunOnce
+    $runOncePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
 
-"@
+    try {
+        # Ensure the RunOnce path exists
+        if (-not (Test-Path $runOncePath)) {
+            New-Item -Path $runOncePath -Force | Out-Null
+        }
 
-    # Write the XML content to the file
-    $xmlContent | Out-File -FilePath `"$UnattendFilePath`" -Encoding utf8 -Force
-    # Verify file creation
-    if (Test-Path `"$UnattendFilePath`") {
-        Write-Host "Unattend file created successfully at: `"$UnattendFilePath`""
-    } else {
-        Write-Host "Failed to create the unattend file." -ForegroundColor Red
+        # Set the RunOnce key with the specified command
+        Set-ItemProperty -Path $runOncePath -Name $KeyName -Value $Command
+
+        # Confirm success
+        Write-Host "RunOnce key created (System-wide): $KeyName -> $Command" -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to create the system-wide RunOnce key: $_"
     }
 }
+
 
 function Push-SystemPrep {
     Write-Host "Running Sysprep..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:`"$UnattendFilePath`"" -Wait
+        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown" -Wait
         Write-Host "Sysprep completed successfully." -ForegroundColor Green
     } catch {
         Write-Error "Sysprep failed: $_.Exception.Message"
@@ -151,7 +139,8 @@ try {
     Copy-BuildFilesUsingAzCopy
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
-    Add-UnattendFile -UnattendFilePath `"$UnattendFilePath`" #-AppInstallScriptPath $appInstallScriptPath
+    Set-RunOnceKey -KeyName "RunAppInstallScript" -Command "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$appInstallScriptPath`""
+
     Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
