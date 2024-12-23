@@ -113,7 +113,7 @@ function Add-UnattendFile {
       <RunSynchronous>
         <RunSynchronousCommand>
           <Order>1</Order>
-          <Path>powershell.exe -ExecutionPolicy Bypass -File `"$AppInstallScriptPath`"</Path>
+          <Path>powershell.exe -ExecutionPolicy Bypass -File &quot;C:\Program Files\ccure\unattend.xml&quot;</Path>
           <Description>Run Application Install Script</Description>
         </RunSynchronousCommand>
       </RunSynchronous>
@@ -151,7 +151,7 @@ try {
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
     Add-UnattendFile -UnattendFilePath $UnattendFilePath -AppInstallScriptPath $appInstallScriptPath
-    Push-SystemPrep
+    # Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
     Exit 1
