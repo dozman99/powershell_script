@@ -113,13 +113,14 @@ function Add-UnattendFile {
       <RunSynchronous>
         <RunSynchronousCommand>
           <Order>1</Order>
-          <Path>powershell.exe -ExecutionPolicy Bypass -File &quot;C:\Program Files\ccure\unattend.xml&quot;</Path>
+          <Path>powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\ccure\unattend.xml"</Path>
           <Description>Run Application Install Script</Description>
         </RunSynchronousCommand>
       </RunSynchronous>
     </component>
   </settings>
 </unattend>
+
 "@
 
     # Write the XML content to the file
