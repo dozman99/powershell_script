@@ -98,10 +98,10 @@ function Add-GlobalEnvironmentVariable {
 function Add-UnattendFile {
     param (
         [Parameter(Mandatory = $true)]
-        [string]$UnattendFilePath,    # Path to save the unattend.xml file
+        [string]$UnattendFilePath    # Path to save the unattend.xml file
 
-        [Parameter(Mandatory = $true)]
-        [string]$AppInstallScriptPath # Path to the application install script
+        # [Parameter(Mandatory = $true)]
+        # [string]$AppInstallScriptPath # Path to the application install script
     )
 
     # Create the XML content dynamically
@@ -151,7 +151,7 @@ try {
     Copy-BuildFilesUsingAzCopy
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
-    Add-UnattendFile -UnattendFilePath `"$UnattendFilePath`" -AppInstallScriptPath $appInstallScriptPath
+    Add-UnattendFile -UnattendFilePath `"$UnattendFilePath`" #-AppInstallScriptPath $appInstallScriptPath
     Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
