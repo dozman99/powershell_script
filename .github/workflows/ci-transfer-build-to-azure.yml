@@ -89,10 +89,11 @@ jobs:
       # Step 3: Install-AzCopy
       - name: Copy-Files to AZ fileshare
         run: |
+          $currentDirectory = Get-Location
+          $AzCopyZipPath = Join-Path $currentDirectory "AzCopy.zip"
           $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
-          $AzCopyZipPath = "AzCopy.zip"
-          $AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           
           function Install-AzCopy {
@@ -153,7 +154,8 @@ jobs:
         run: |
           $SourcePath = Join-Path "image_automation_scripts" "ccureAppInstall.ps1"
           $AzCopyZipPath = "AzCopy.zip"
-          $AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $currentDirectory = Get-Location
+          $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
 
