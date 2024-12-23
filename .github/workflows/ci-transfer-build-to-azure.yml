@@ -156,7 +156,7 @@ jobs:
           $AzCopyZipPath = "AzCopy.zip"
           $currentDirectory = Get-Location
           $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
-          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+          $destinationUri = "https://ospclouddevccurebuild.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           # $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
 
 
