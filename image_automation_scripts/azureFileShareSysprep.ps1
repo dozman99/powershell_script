@@ -113,7 +113,7 @@ function Add-UnattendFile {
       <RunSynchronous>
         <RunSynchronousCommand>
           <Order>1</Order>
-          <Path>powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\ccure\unattend.xml"</Path>
+          <Path>powershell.exe -NoLogo -ExecutionPolicy Bypass -File "C:\Program Files\ccure\unattend.xml"</Path>
           <Description>Run Application Install Script</Description>
         </RunSynchronousCommand>
       </RunSynchronous>
@@ -124,10 +124,10 @@ function Add-UnattendFile {
 "@
 
     # Write the XML content to the file
-    $xmlContent | Out-File -FilePath $UnattendFilePath -Encoding utf8 -Force
+    $xmlContent | Out-File -FilePath `"$UnattendFilePath`" -Encoding utf8 -Force
     # Verify file creation
-    if (Test-Path $UnattendFilePath) {
-        Write-Host "Unattend file created successfully at: $UnattendFilePath"
+    if (Test-Path `"$UnattendFilePath`") {
+        Write-Host "Unattend file created successfully at: `"$UnattendFilePath`""
     } else {
         Write-Host "Failed to create the unattend file." -ForegroundColor Red
     }
@@ -136,7 +136,7 @@ function Add-UnattendFile {
 function Push-SystemPrep {
     Write-Host "Running Sysprep..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:$UnattendFilePath" -Wait
+        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:`"$UnattendFilePath`"" -Wait
         Write-Host "Sysprep completed successfully." -ForegroundColor Green
     } catch {
         Write-Error "Sysprep failed: $_.Exception.Message"
@@ -151,7 +151,7 @@ try {
     Copy-BuildFilesUsingAzCopy
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
-    Add-UnattendFile -UnattendFilePath $UnattendFilePath -AppInstallScriptPath $appInstallScriptPath
+    Add-UnattendFile -UnattendFilePath `"$UnattendFilePath`" -AppInstallScriptPath $appInstallScriptPath
     Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
