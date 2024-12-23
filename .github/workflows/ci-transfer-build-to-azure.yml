@@ -214,7 +214,7 @@ jobs:
       vm_image_version: ${{ inputs.vm_image_version}}
       nsg_name: ${{ inputs.nsg_name}}
       net_location: ${{ inputs.vnet_location}}
-      storage_account_name: 'ospclouddevccurebuilds'
+      storage_account_name: 'ospclouddevccurebuild'
       file_share_name: 'ospclouddevccurefileshare'
 
     secrets:
