@@ -151,7 +151,7 @@ try {
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
     Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
     Add-UnattendFile -UnattendFilePath $UnattendFilePath -AppInstallScriptPath $appInstallScriptPath
-    # Push-SystemPrep
+    Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
     Exit 1
