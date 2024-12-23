@@ -87,32 +87,32 @@ jobs:
   #         Write-Host "Files copied and verified successfully"
 
       # Step 3: Install-AzCopy
-      - name: Copy-Files to AZ fileshare
-        run: |
-          $currentDirectory = Get-Location
-          $AzCopyZipPath = Join-Path $currentDirectory "AzCopy.zip"
-          $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
-          $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
-          $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
-          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+      # - name: Copy-Files to AZ fileshare
+      #   run: |
+      #     $currentDirectory = Get-Location
+      #     $AzCopyZipPath = Join-Path $currentDirectory "AzCopy.zip"
+      #     $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
+      #     $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
+      #     $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
+      #     $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           
-          function Install-AzCopy {
-              Write-Host "Downloading AzCopy..." -ForegroundColor Green
-              Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
+      #     function Install-AzCopy {
+      #         Write-Host "Downloading AzCopy..." -ForegroundColor Green
+      #         Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
 
-              Write-Host "Extracting AzCopy..." -ForegroundColor Green
-              Expand-Archive -Path $AzCopyZipPath -DestinationPath $AzCopyInstallPath -Force
+      #         Write-Host "Extracting AzCopy..." -ForegroundColor Green
+      #         Expand-Archive -Path $AzCopyZipPath -DestinationPath $AzCopyInstallPath -Force
 
-              Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
-              Remove-Item -Path $AzCopyZipPath -Force
+      #         Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
+      #         Remove-Item -Path $AzCopyZipPath -Force
 
-              $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
-              if (!(Test-Path $global:azCopyPath)) {
-                  Write-Error "AzCopy installation failed. Ensure the file exists in '$AzCopyInstallPath'."
-                  Exit 1
-              }
-              Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
-          }
+      #         $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+      #         if (!(Test-Path $global:azCopyPath)) {
+      #             Write-Error "AzCopy installation failed. Ensure the file exists in '$AzCopyInstallPath'."
+      #             Exit 1
+      #         }
+      #         Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
+      #     }
 
   #         function Copy-Files {
   #             Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
@@ -158,6 +158,36 @@ jobs:
           $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+
+
+
+
+          $currentDirectory = Get-Location
+          $AzCopyZipPath = Join-Path $currentDirectory "AzCopy.zip"
+          $SourcePath = Join-Path "${{ env.TEMP_DIR }}" "UC_${{ inputs.semantic_version }}"
+          $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
+          $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+          
+          function Install-AzCopy {
+              Write-Host "Downloading AzCopy..." -ForegroundColor Green
+              Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
+
+              Write-Host "Extracting AzCopy..." -ForegroundColor Green
+              Expand-Archive -Path $AzCopyZipPath -DestinationPath $AzCopyInstallPath -Force
+
+              Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
+              Remove-Item -Path $AzCopyZipPath -Force
+
+              $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+              if (!(Test-Path $global:azCopyPath)) {
+                  Write-Error "AzCopy installation failed. Ensure the file exists in '$AzCopyInstallPath'."
+                  Exit 1
+              }
+              Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
+          }
+
+          
 
           function Copy-Files {
               Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
