@@ -46,12 +46,13 @@ on:
         type: string
         default: 'vm-osp-ccure-windows-server-2022-nsg'
 jobs:
-  # TransferBuild:
-  #   runs-on: [self-hosted, Windows, C2892M312]
-  #   env:
-  #     TEMP_DIR: 'projects'
+  TransferBuild:
+    # runs-on: [self-hosted, Windows, C2892M312]
+    runs-on: windows-latest
+    env:
+      TEMP_DIR: 'projects'
 
-  #   steps:
+    steps:
   #     # Step 1: Mount On-Prem Network Drive
   #     - name: Mount On-Prem Network Drive
   #       run: |
@@ -143,31 +144,31 @@ jobs:
   #         Copy-Files
   #         Cleanup-TempDirectory
 
-  #     # Step 4: checkout repo to copy script
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v3
+      # Step 4: checkout repo to copy script
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-  #     # Step 5: AzCopy
-  #     - name: Copy-script to AZ fileshare
-  #       run: |
-  #         $SourcePath = Join-Path "image_automation_scripts" "ccureAppInstall.ps1"
-  #         $AzCopyZipPath = "AzCopy.zip"
-  #         $AzCopyInstallPath = "C:\Program Files\AzCopy"
-  #         $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
-  #         $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+      # Step 5: AzCopy
+      - name: Copy-script to AZ fileshare
+        run: |
+          $SourcePath = Join-Path "image_automation_scripts" "ccureAppInstall.ps1"
+          $AzCopyZipPath = "AzCopy.zip"
+          $AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+          $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
 
-  #         function Copy-Files {
-  #             Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
-  #             try {
-  #                 Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$SourcePath", "$destinationUri", "--preserve-smb-info=true") -NoNewWindow -Wait
-  #                 Write-Host "Files copied successfully from $SourcePath." -ForegroundColor Green
-  #             } catch {
-  #                 Write-Error "File copy failed: $_.Exception.Message"
-  #                 Exit 1
-  #             }
-  #         }
+          function Copy-Files {
+              Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
+              try {
+                  Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$SourcePath", "$destinationUri", "--preserve-smb-info=true") -NoNewWindow -Wait
+                  Write-Host "Files copied successfully from $SourcePath." -ForegroundColor Green
+              } catch {
+                  Write-Error "File copy failed: $_.Exception.Message"
+                  Exit 1
+              }
+          }
 
-  #         Copy-Files
+          Copy-Files
 
 
   #     # Step 6: Cleanup Temporary Directory
