@@ -44,7 +44,6 @@ function Set-FirewallRule {
         -LocalPort $Port `
         -Action Block `
         -Group $Group
-    # Example usage Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
 }
 
 function Install-AzCopy {
@@ -125,7 +124,6 @@ function Add-UnattendFile {
 
     # Write the XML content to the file
     $xmlContent | Out-File -FilePath $UnattendFilePath -Encoding utf8 -Force
-
     # Verify file creation
     if (Test-Path $UnattendFilePath) {
         Write-Host "Unattend file created successfully at: $UnattendFilePath"
