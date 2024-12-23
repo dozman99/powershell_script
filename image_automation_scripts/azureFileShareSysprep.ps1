@@ -135,7 +135,7 @@ function Add-UnattendFile {
 function Push-SystemPrep {
     Write-Host "Running Sysprep..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:$unattendFile" -Wait
+        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:$UnattendFilePath" -Wait
         Write-Host "Sysprep completed successfully." -ForegroundColor Green
     } catch {
         Write-Error "Sysprep failed: $_.Exception.Message"
