@@ -41,10 +41,6 @@ on:
         description: 'Azure File Share Name'
         required: true
         type: string
-      source_files_path:
-        description: 'Source Files Path in the File Share'
-        required: true
-        type: string
     secrets:
       AZURE_SUBSCRIPTION_ID:
         description: Your Azure subscription ID.
@@ -79,11 +75,11 @@ jobs:
     - name: Azure login
       uses: azure/login@v2
       with:
-        creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
-        # auth-type: IDENTITY
-        # client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        # tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        # creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+        auth-type: IDENTITY
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     - name: variable
       run: |
@@ -107,7 +103,7 @@ jobs:
       run: |
         az vm create --resource-group "${{ env.VM_NAME }}-rg" --name "${{ env.VM_NAME }}" \
           --location ${{ inputs.net_location }} --size Standard_D8as_v5 \
-          --image MicrosoftSQLServer:sql2022-ws2022:web-gen2:16.0.241114 \
+          --image MicrosoftWindowsServer:WindowsServer:2022-datacenter-g2:latest \
           --os-disk-name "${{ env.VM_NAME }}-osdisk" \
           --admin-username ${{ secrets.ADMIN_USERNAME }} --admin-password ${{ secrets.ADMIN_PASSWORD }} \
           --security-type Standard --public-ip-address ""
@@ -119,7 +115,6 @@ jobs:
           --parameters 'StorageAccountName=${{ inputs.storage_account_name }}' \
                        'FileShareName=${{ inputs.file_share_name }}' \
                        'StorageAccountKey="${{ secrets.SAS_TOKEN }}"' \
-                       'BuildFilesPath="${{ inputs.source_files_path }}"' \
                        'Version="UC_${{ inputs.semantic_version }}"' \
                        'DestinationPath=C:\Program Files\ccure'
     

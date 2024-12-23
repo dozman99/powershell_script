@@ -12,10 +12,6 @@ on:
         description: Semantic version to locate the build
         required: true
         type: string
-      azure_file_share_path:
-        description: Destination path to Azure file share (new server)
-        required: true
-        type: string
       nfs_address:
         description: 'The NFS server address'
         required: true
@@ -52,7 +48,6 @@ on:
 jobs:
   TransferBuild:
     runs-on: [self-hosted, Windows, C2892M312]
-    # runs-on: windows-latest
     env:
       TEMP_DIR: 'projects'
 
@@ -69,8 +64,7 @@ jobs:
         run: |
           # Define the build path
           $buildPath = Join-Path ${{ inputs.build_path }} "UC_${{ inputs.semantic_version }}"
-          $currentDirectory = Get-Location
-          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
+          $tempDir = "${{ env.TEMP_DIR }}"
           
           # List files in the build path
           Get-ChildItem -Path $buildPath | Select-Object -ExpandProperty Name
@@ -98,9 +92,8 @@ jobs:
           $AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
           $AzCopyZipPath = "AzCopy.zip"
           $AzCopyInstallPath = "C:\Program Files\AzCopy"
-          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare/${{ inputs.azure_file_share_path }}?${{ secrets.SAS_TOKEN }}"
-          $currentDirectory = Get-Location
-          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+          
 
           function Install-AzCopy {
               Write-Host "Downloading AzCopy..." -ForegroundColor Green
@@ -134,8 +127,8 @@ jobs:
           function Cleanup-TempDirectory {
               Write-Host "Cleaning up temporary directory..." -ForegroundColor Green
               try {
-                  if (Test-Path $tempDir) {
-                      Remove-Item -Path $tempDir -Recurse -Force
+                  if (Test-Path $SourcePath) {
+                      Remove-Item -Path $SourcePath -Recurse -Force
                       Write-Host "Temporary directory cleaned up." -ForegroundColor Green
                   }
               } catch {
@@ -145,15 +138,43 @@ jobs:
           }
 
           Install-AzCopy
+          #cleanup az fileshare
+          Write-Host "Deleting folders in AZ fileshare"
+          & $global:azCopyPath remove $azurePath --recursive=true
           Copy-Files
           Cleanup-TempDirectory
 
-      # Step 4: Cleanup Temporary Directory
+      # Step 4: checkout repo to copy script
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 5: AzCopy
+      - name: Copy-script to AZ fileshare
+        run: |
+          $SourcePath = Join-Path "image_automation_scripts" "ccureAppInstall.ps1"
+          $AzCopyZipPath = "AzCopy.zip"
+          $AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+          $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+          function Copy-Files {
+              Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
+              try {
+                  Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$SourcePath", "$destinationUri", "--preserve-smb-info=true") -NoNewWindow -Wait
+                  Write-Host "Files copied successfully from $SourcePath." -ForegroundColor Green
+              } catch {
+                  Write-Error "File copy failed: $_.Exception.Message"
+                  Exit 1
+              }
+          }
+
+          Copy-Files
+
+
+      # Step 6: Cleanup Temporary Directory
       - name: Cleanup Temporary Directory
         if: ${{ always() }}
         run: |
-          $currentDirectory = Get-Location
-          $tempDir = Join-Path $currentDirectory "${{ env.TEMP_DIR }}"
+          $tempDir = "${{ env.TEMP_DIR }}"
 
           try {
               if (Test-Path $tempDir) {
@@ -165,7 +186,7 @@ jobs:
               exit 1
           }
 
-      # Step 5: Cleanup Network Drives
+      # Step 7: Cleanup Network Drives
       - name: Cleanup Network Drives
         if: ${{ always() }}
         run: |
@@ -177,10 +198,10 @@ jobs:
               exit 1
           }
 
-      # Step 5: Retrieve Runners IP Address use for white listing azure file share network permission
-      - name: Retrieve Runners IP Address
-        run: |
-          Invoke-RestMethod -Uri "https://ifconfig.me/ip"     
+      # # Step 8: Retrieve Runners IP Address use for white listing azure file share network permission
+      # - name: Retrieve Runners IP Address
+      #   run: |
+      #     Invoke-RestMethod -Uri "https://ifconfig.me/ip"     
 
   create_disposable_vm_for_image:
     needs: TransferBuild
@@ -192,7 +213,6 @@ jobs:
       version: ${{ inputs.semantic_version}}
       vm_image_version: ${{ inputs.vm_image_version}}
       nsg_name: ${{ inputs.nsg_name}}
-      source_files_path: ${{ inputs.azure_file_share_path }}
       net_location: ${{ inputs.vnet_location}}
       storage_account_name: 'ospclouddevccurebuilds'
       file_share_name: 'ospclouddevccurefileshare'
@@ -205,3 +225,38 @@ jobs:
       SAS_TOKEN: ${{ secrets.SAS_TOKEN }}
       ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+  cleanup_fileshare:
+    needs: create_disposable_vm_for_image
+    runs-on: [self-hosted, Windows, C2892M312]
+    steps:
+      - run: |
+          Write-Host "Setting up environment variables..."
+          AzCopyZipUrl = "https://aka.ms/downloadazcopy-v10-windows"
+          AzCopyZipPath = "AzCopy.zip"
+          AzCopyInstallPath = "C:\Program Files\AzCopy"
+          $azurePath = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
+
+          function Install-AzCopy {
+              Write-Host "Downloading AzCopy..." -ForegroundColor Green
+              Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
+
+              Write-Host "Extracting AzCopy..." -ForegroundColor Green
+              Expand-Archive -Path $AzCopyZipPath -DestinationPath $AzCopyInstallPath -Force
+
+              Write-Host "Cleaning up AzCopy download files..." -ForegroundColor Green
+              Remove-Item -Path $AzCopyZipPath -Force
+
+              $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+              if (!(Test-Path $global:azCopyPath)) {
+                  Write-Error "AzCopy installation failed. Ensure the file exists in '$AzCopyInstallPath'."
+                  Exit 1
+              }
+              Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
+          }
+
+          # Call the Install-AzCopy function
+          Install-AzCopy
+
+          Write-Host "Deleting folders in AZ fileshare"
+          & $global:azCopyPath remove $azurePath --recursive=true

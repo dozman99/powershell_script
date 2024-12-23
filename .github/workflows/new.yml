@@ -1,0 +1,84 @@
+name: Cleanup Images From Azure Image Gallery
+on:
+  workflow_dispatch:
+    inputs:
+      tag_key:
+        description: Tag key to apply to the image
+        default: 'Name'
+        required: true
+        type: string
+      tag_value:
+        description: Tag value to apply to the image
+        default: 'gold'
+        required: true
+        type: string
+      resource_group:
+        description: Azure Resource Group
+        required: true
+        type: string
+      image_gallery_name:
+        description: Image Gallery Name
+        required: true
+        type: string
+        default: 'CCURE_image_galley'
+      image_Name:
+        description: Image Name
+        required: true
+        type: string
+        default: 'ccure-image-vm'     
+
+
+jobs:
+  cull-image-gallery:
+    runs-on: [self-hosted, linux, osp-cloud-devOps-runner1]
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          auth-type: IDENTITY
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Delete Old Images from Image Gallery
+        shell: bash
+        run: |
+          # Define input variables
+          $resourceGroup = "${{ inputs.resource_group }}"
+          $imageGalleryName = "${{ inputs.image_gallery_name }}"
+          $imageName = "${{ inputs.image_Name }}"
+          $tagKey = "${{ inputs.tag_key }}"
+          $tagValue = "${{ inputs.tag_value }}"
+          
+          echo "Fetching image versions from Image Gallery: $imageGalleryName, Image: $imageName"
+
+          # List all image versions
+          imageVersions=$(az sig image-version list \
+            --resource-group "$resourceGroup" \
+            --gallery-name "$imageGalleryName" \
+            --gallery-image-definition "$imageName" \
+            --query "[].{name:name, publishedDate:publishingProfile.publishedDate, tags:tags}" \
+            --output json)
+
+          # Retain the 5 most recent image versions
+          recentImageVersions=$(echo "$imageVersions" | jq -r 'sort_by(.publishedDate) | reverse | .[:5] | .[].name')
+
+          # Ensure the tagged image version is retained
+          taggedImageVersion=$(echo "$imageVersions" | jq -r --arg tagKey "$tagKey" --arg tagValue "$tagValue" '.[] | select(.tags[$tagKey] == $tagValue) | .name')
+
+          # Combine the lists and remove duplicates
+          retainImageVersions=$(echo -e "$recentImageVersions\n$taggedImageVersion" | sort | uniq)
+
+          # Delete image versions not in the retain list
+          for version in $(echo "$imageVersions" | jq -r '.[].name'); do
+            if ! echo "$retainImageVersions" | grep -q "$version"; then
+              echo "Deleting image version: $version"
+              az sig image-version delete \
+                --resource-group "$resourceGroup" \
+                --gallery-name "$imageGalleryName" \
+                --gallery-image-definition "$imageName" \
+                --gallery-image-version "$version"
+            fi
+          done
+
+          echo "Old image versions deleted successfully from Azure Image Gallery."

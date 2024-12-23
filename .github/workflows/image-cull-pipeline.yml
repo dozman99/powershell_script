@@ -73,16 +73,22 @@ jobs:
       - name: Delete Old Directories from On-Premises
         run: |
           $directoryPath = ${{ inputs.build_path }}
-          # $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
-          $threshold = (Get-Date).AddMinutes(-7).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+          $threshold = (Get-Date).AddDays(-${{ inputs.retention_period }})
 
-          Write-Host "Checking for directories in $directoryPath older than $threshold..."
+          Write-Host "Checking for directories in $directoryPath older than $($threshold.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"))..."
 
+          # Get all directories recursively, filter by LastWriteTime, and exclude "stuff"
           Get-ChildItem -Path $directoryPath -Directory -Recurse | Where-Object {
-            $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "${{ inputs.tag }}"
+              $_.LastWriteTime -lt $threshold -and $_.Name -notmatch "stuff"
           } | ForEach-Object {
-            Write-Host "Deleting directory: $($_.FullName)"
-            Remove-Item -Path $_.FullName -Recurse -Force
+              # Log and delete each directory
+              Write-Host "Deleting directory: $($_.FullName)"
+              try {
+                  Remove-Item -Path $_.FullName -Recurse -Force
+                  Write-Host "Successfully deleted: $($_.FullName)"
+              } catch {
+                  Write-Host "Failed to delete: $($_.FullName). Error: $_"
+              }
           }
 
           Write-Host "Old directories and their contents deleted from the on-premises network drive."

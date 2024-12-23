@@ -2,18 +2,14 @@ param (
     [string]$StorageAccountName,
     [string]$FileShareName,
     [System.String]$StorageAccountKey,
-    [string]$BuildFilesPath,
     [string]$Version,
     [string]$DestinationPath = "C:\Program Files\ccure",
-    [string]$SysprepPath = "C:\Windows\System32\Sysprep\Sysprep.exe",
-    [string]$installPathSql = "C:\Program Files\SQLserver2022" #olasupo needs to find the path
-    
+    [string]$SysprepPath = "C:\Windows\System32\Sysprep\Sysprep.exe"    
 )
 
 #  Define variables for the service installation
-$SourceFilesPath=Join-Path $BuildFilesPath "UC_$Version"
-$AppDirectory = Join-Path $installPathSql $version "Copied" #"C:\Program Files\ccure\UC_4.10.368.368\Copied\" #olasupo needs to find the path
-
+$appInstallScriptPath = Join-Path $DestinationPath "ccureAppInstall.ps1"
+$UnattendFilePath = Join-Path $DestinationPath "unattend.xml"
 
 function Set-ExecutionPolicyIfNeeded {
     if ((Get-ExecutionPolicy) -ne "RemoteSigned") {
@@ -73,7 +69,7 @@ function Install-AzCopy {
 }
 
 function Copy-BuildFilesUsingAzCopy {
-    $sourceUri = "https://{0}.file.core.windows.net/{1}/{2}/*?{3}" -f $StorageAccountName, $FileShareName, $SourceFilesPath, $StorageAccountKey
+    $sourceUri = "https://{0}.file.core.windows.net/{1}/*?{2}" -f $StorageAccountName, $FileShareName, $StorageAccountKey
     Write-Host "Copying files from Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
     try {
         Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$sourceUri", "`"$DestinationPath`"", "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
@@ -84,126 +80,74 @@ function Copy-BuildFilesUsingAzCopy {
     }
 }
 
-function Get-NSSM {
-    $NSSMDownloadUrl = "https://nssm.cc/release/nssm-2.24.zip" # Update to the desired version URL
-    $NSSMExtractPath = "C:\Program Files\nssm"
-    
-    $NSSMZipPath = "$NSSMExtractPath\nssm.zip"
 
-    if (-Not (Test-Path $NSSMExtractPath)) {
-        New-Item -ItemType Directory -Path $NSSMExtractPath | Out-Null
-    }
-
-    Write-Host "Downloading NSSM..."
-    Invoke-WebRequest -Uri $NSSMDownloadUrl -OutFile $NSSMZipPath
-
-    Write-Host "Extracting NSSM..."
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($NSSMZipPath, $NSSMExtractPath)
-    Remove-Item $NSSMZipPath
-
-    Write-Host "NSSM downloaded and extracted to $NSSMExtractPath"
-}
-
-function Install-NSSMService {
+function Add-GlobalEnvironmentVariable {
     param (
-        [string]$ServiceName,
-        [string]$AppPath,
-        [string]$AppDirectory,
-        [string]$AppArguments
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Value
     )
-    $global:NSSMPath = "$NSSMExtractPath\win64\nssm.exe"  
-    # Ensure NSSM is available
-    if (-Not (Test-Path $global:NSSMPath)) {
-        Write-Host "NSSM not found at $global:NSSMPath. Please ensure NSSM is installed and the path is correct."
-        Exit 1
-    }
 
-    # Install the service
-    Write-Host "Installing service: $ServiceName"
-    & $global:NSSMPath install $ServiceName $AppPath
-
-    # Configure the service
-    Write-Host "Configuring service: $ServiceName"
-    & $global:NSSMPath set $ServiceName AppDirectory $AppDirectory
-    & $global:NSSMPath set $ServiceName AppParameters $AppArguments
-
-    Write-Host "Configuring service: $ServiceName to not restart on failure"
-    & $global:NSSMPath set $ServiceName AppNoConsole 1 
-    # & $global:NSSMPath set $ServiceName AppStopMethodSkip 5
-
-    # Start the service
-    Write-Host "Starting service: $ServiceName"
-    & $global:NSSMPath start $ServiceName
-
-    # Verify service status
-    $ServiceStatus = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($ServiceStatus.Status -eq "Running") {
-        Write-Host "Service $ServiceName is running successfully."
-    } else {
-        Write-Host "Service $ServiceName failed to start. Check the NSSM logs for details."
-    }
-
-}
-
-function Copy-SQLFilesUsingAzCopy {
-    $sourceUri = "https://{0}.file.core.windows.net/{1}/sqlserver2022/*?{2}" -f $StorageAccountName, $FileShareName, $StorageAccountKey
-    Write-Host "Copying files from Azure File Share to the local directory using AzCopy..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$sourceUri", "`"$installPathSql`"", "--recursive", "--preserve-smb-info=true") -NoNewWindow -Wait
-        Write-Host "---Files copied successfully to "`"$installPathSql`""---" -ForegroundColor Green
+        # Add the environment variable to the registry
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name $Name -Value $Value -Force
+
+        # Notify the system of the environment variable change
+        [Environment]::SetEnvironmentVariable($Name, $Value, [System.EnvironmentVariableTarget]::Machine)
+
+        Write-Output "Environment variable '$Name' has been added with the value: '$Value'."
     } catch {
-        Write-Error "File copy failed: $_.Exception.Message"
-        Exit 1
+        Write-Error "Failed to add the environment variable '$Name'. Error: $_"
     }
 }
 
-function Install-Sql {
-    $ServiceName = "SQLserver"
-    $AppPath = Join-Path -Path $installPathSql "Setup.exe"
 
-# Check if the directory exists 
-    if (Test-Path -Path $AppPath) { 
-        Write-Host "Directory exists at $AppPath."} 
-    else {
-        Write-Output "Exiting script." 
-        Exit 1 | Out-Null
-    }
+function Add-UnattendFile {
+    param (
+        
+        [string]$UnattendFilePath,    # Path to save the unattend.xml file
 
-    # Construct the setup arguments
-    $AppArguments = @(
-        "/Q",
-        "/ACTION=install",
-        "/INSTANCENAME=CCUREINST",
-        "/INSTANCEID=CCUREINST",
-        "/SQLSVCACCOUNT=`"CCURE`"",
-        "/SQLSVCPASSWORD=`"Password@14isgood`"",
-        "/SQLSYSADMINACCOUNTS=`"CCUREADMIN`"",
-        "/AGTSVCACCOUNT=`"NT AUTHORITY\NETWORK SERVICE`"",
-        "/INSTALLPATH=`"C:\Program Files\Microsoft SQL Server`""
-        "/IACCEPTSQLSERVERLICENSETERMS"
+        [Parameter(Mandatory = $true)]
+        [string]$AppInstallScriptPath # Path to the application install script
     )
 
-    Install-NSSMService -ServiceName $ServiceName -AppPath $AppPath -AppDirectory $installPathSql -AppArguments $AppArguments
-    Write-Output "SQL Server 2022 installation completed successfully."
+    # Create the XML content dynamically
+    $xmlContent = @"
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <RunSynchronous>
+        <RunSynchronousCommand>
+          <Order>1</Order>
+          <Path>powershell.exe -ExecutionPolicy Bypass -File `"$AppInstallScriptPath`"</Path>
+          <Description>Run Application Install Script</Description>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+</unattend>
+"@
+
+    # Write the XML content to the file
+    $xmlContent | Out-File -FilePath $UnattendFilePath -Encoding utf8 -Force
+
+    # Verify file creation
+    if (Test-Path $UnattendFilePath) {
+        Write-Host "Unattend file created successfully at: $UnattendFilePath"
+    } else {
+        Write-Host "Failed to create the unattend file." -ForegroundColor Red
+    }
 }
 
-function Install-Dashboard {
-    $ServiceName = "DashboardService"
-    $AppPath = Join-Path $DestinationPath "UC_$Version" "Copied\ISOImage\dashboard.exe" # Update to the path of dashboard.exe
-    $AppDirectory = Join-Path $DestinationPath "UC_$Version" "Copied\ISOImage\" # Update to the startup directory
-    # Command-line arguments for the application
-    $AppArguments = "/SOURCE:`"C:\Users\adminolasupo\Desktop\UC_4.10.368.368\Copied\ISOImage`" /F:VictorAutoUpdateServer -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" /F:VictorApplicationServer -SqlServer:vm-osp-crossfir -VasServicePassword:UhaNA+9zcAqW48b5tm7u2w== -VasServiceDomainName:vm-osp-crossfir -VasServiceUsername:adminolasupo -VasServiceAccountType:2 -IntegratedSecurity:TRUE -MicrosoftEntraID:FALSE -VasLocalServiceAccount:vm-osp-crossfir\adminolasupo -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -IsSqlServerLocal:1 -AppServerType:0 -DBManagerExePath:`"C:\Program Files (x86)\JCI\Crossfire\DBManager`" -ServerType:1 -DBBuildInstallConfig:Standalone -VictorOnlyIsInstalled:0 -CCureClientIsInstalled:1 -VictorClientIsInstalled:0 -SqlConnectionString:`"Data Source=vm-osp-crossfir;Initial Catalog=master;Integrated Security=True;`" -WebSiteName:`"Default Web Site`" -EnhancedSecurity:1 -EncryptionSecurity:1 -SkipDBManager:1 -EncryptionPassPhrase:hWRH2meXkWeEbryZeN7LWFpuaLp2mXFawLNKnamcnDU= /F:Ccure9000Client -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -VasServer:localhost /F:CcureGoWebService -WebServiceDomainName:vm-osp-crossfir -WebServiceUsername:adminolasupo -LocalServiceAccount:0 -WebServicePassword:UhaNA+9zcAqW48b5tm7u2w== -VasServer:localhost -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -WebSiteName:`"Default Web Site`" /F:VictorWebService -SqlServer:vm-osp-crossfir -WebServiceDomainName:vm-osp-crossfir -WebServiceUsername:adminolasupo -WebServicePassword:UhaNA+9zcAqW48b5tm7u2w== -VasServer:localhost -IntegratedSecurity:TRUE -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -VasForWebServiceLocalOrRemote:2 -SqlConnectionString:`"Data Source=vm-osp-crossfir;Initial Catalog=master;Integrated Security=True;`" -WebSiteName:`"Default Web Site`" /F:CCUREAutoUpdateServer -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -CcureAutoUpdateInstallDate:12/13/2024 -WebSiteName:`"Default Web Site`" /F:victorClientAutoUpdatePackage /F:CCUREAutoUpdateClient -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" /F:CCPortal -CCurePortalPort:HTTPS -UseHTTPSPortal:1 -ServerMode:IIS -IpType:true -AllowRemoteConnections:true -CCurePortalPortNumber:443 -PortalServer:localhost -JCIInstallDirectory:`"C:\Program Files (x86)\JCI`" -WebserviceDevice:localhost -WebSiteName:`"Default Web Site`" /F:VictorWebClient -VictorWebPort:HTTPS -VictorWebPortNumber:443 -WebServiceUsername:vm-osp-crossfir\adminolasupo -VictorWebClientAdminUsername:vm-osp-crossfir\adminolasupo -VictorWebClientAdminPassword:UhaNA+9zcAqW48b5tm7u2w== -VictorWebClientAdminPasswordReenter:UhaNA+9zcAqW48b5tm7u2w== -WebServicePassword:UhaNA+9zcAqW48b5tm7u2w== -vWCServer:localhost"
 
- 
-
-    Install-NSSMService -ServiceName $ServiceName -AppPath `"$AppPath`" -AppDirectory `"$AppDirectory`" -AppArguments $AppArguments
-}
 
 function Push-SystemPrep {
     Write-Host "Running Sysprep..." -ForegroundColor Green
     try {
-        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown" -Wait
+        Start-Process -FilePath $SysprepPath -ArgumentList "/oobe /generalize /shutdown /unattend:$unattendFile" -Wait
         Write-Host "Sysprep completed successfully." -ForegroundColor Green
     } catch {
         Write-Error "Sysprep failed: $_.Exception.Message"
@@ -212,22 +156,14 @@ function Push-SystemPrep {
 }
 
 
-
-
-
-
-
-
 # Main script execution
 try {
     Set-ExecutionPolicyIfNeeded
     Install-AzCopy
-    Get-NSSM
-    Copy-SQLFilesUsingAzCopy
-    Install-Sq
     Copy-BuildFilesUsingAzCopy
-    Install-Dashboard
     # Set-FirewallRule -IPAddress "192.168.0.2" -Port 80 -Group "Web Traffic"
+    Add-GlobalEnvironmentVariable -Name "CCUREBUILD" -Value $Version
+    Add-UnattendFile -UnattendFilePath $UnattendFilePath -AppInstallScriptPath $appInstallScriptPath
     Push-SystemPrep
 } catch {
     Write-Error "An error occurred during script execution: $_.Exception.Message"
