@@ -169,7 +169,7 @@ jobs:
           $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
           
-          function Install-AzCopy {
+          # function Install-AzCopy {
               Write-Host "Downloading AzCopy..." -ForegroundColor Green
               Invoke-WebRequest -Uri $AzCopyZipUrl -OutFile $AzCopyZipPath -UseBasicParsing
 
@@ -185,9 +185,9 @@ jobs:
                   Exit 1
               }
               Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
-          }
+          # }
 
-          function Copy-Files {
+          # function Copy-Files {
               Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
               try {
                   Start-Process -FilePath $global:azCopyPath -ArgumentList @("copy", "$SourcePath", "$destinationUri", "--preserve-smb-info=true") -NoNewWindow -Wait
@@ -196,9 +196,9 @@ jobs:
                   Write-Error "File copy failed: $_.Exception.Message"
                   Exit 1
               }
-          }
-          Install-AzCopy
-          Copy-Files
+          # }
+          # Install-AzCopy
+          # Copy-Files
 
 
   #     # Step 6: Cleanup Temporary Directory
