@@ -157,11 +157,7 @@ jobs:
           $currentDirectory = Get-Location
           $AzCopyInstallPath = Join-Path $currentDirectory "AzCopy"
           $destinationUri = "https://ospclouddevccurebuilds.file.core.windows.net/ospclouddevccurefileshare?${{ secrets.SAS_TOKEN }}"
-
-
-
-
-          # $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
+          $global:azCopyPath = (Get-ChildItem $AzCopyInstallPath -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName + "\azcopy.exe"
 
 
 
@@ -191,8 +187,6 @@ jobs:
               Write-Host "AzCopy installed at $global:azCopyPath" -ForegroundColor Green
           }
 
-
-
           function Copy-Files {
               Write-Host "Copying files from local directory to the Azure File Share using AzCopy..." -ForegroundColor Green
               try {
@@ -203,7 +197,7 @@ jobs:
                   Exit 1
               }
           }
-
+          Install-AzCopy
           Copy-Files
 
 
