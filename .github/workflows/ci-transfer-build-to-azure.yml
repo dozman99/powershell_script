@@ -205,7 +205,7 @@ jobs:
       #     Invoke-RestMethod -Uri "https://ifconfig.me/ip"     
 
   create_disposable_vm_for_image:
-    # needs: TransferBuild
+    needs: TransferBuild
     uses: ./.github/workflows/image_creation.yml
     with:
       resource_group: ${{ inputs.resource_group}}
